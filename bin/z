@@ -116,6 +116,15 @@ z_create_worktree() {
 
   mkdir -p "$worktree_path"
   git -C "$repo_path" worktree add "$worktree_path"
+
+  local default_branch
+  default_branch="$(git -C "$repo_path" branch --show-current)"
+
+  if [[ -n "$default_branch" ]]; then
+    git -C "$worktree_path" branch --set-upstream-to="origin/$default_branch"
+    gum log -t info "set upstream to origin/$default_branch"
+  fi
+
   z_apply_rcm_worktrees_overlay "$eng_area" "$worktree_path"
 }
 
