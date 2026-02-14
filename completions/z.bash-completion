@@ -1,0 +1,8 @@
+_z_complete() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  COMPREPLY=()
+  while IFS=$'\t' read -r path _desc; do
+    [[ "$path" == "$cur"* ]] && COMPREPLY+=("$path")
+  done < <(z-completions 2>/dev/null)
+}
+complete -F _z_complete z

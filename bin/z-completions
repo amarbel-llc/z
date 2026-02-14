@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+z_completions_local() {
+  for area_path in "$HOME"/eng*; do
+    [[ -d "$area_path" ]] || continue
+    local area="${area_path#"$HOME"/}"
+
+    for repo_path in "$HOME/$area/repos"/*; do
+      [[ -d "$repo_path" ]] || continue
+      local repo="${repo_path##*/}"
+      printf "%s/\t%s\n" "$area/worktrees/$repo" "new worktree"
+
+      for worktree_path in "$HOME/$area/worktrees/$repo"/*; do
+        [[ -d "$worktree_path" ]] || continue
+        local worktree="${worktree_path##*/}"
+        printf "%s\t%s\n" "$area/worktrees/$repo/$worktree" "existing worktree"
+      done
+    done
+  done
+}
+
+z_completions_remote() {
+  local hosts=()
+
+  if [[ -n "${Z_REMOTE_HOSTS:-}" ]]; then
+    IFS=: read -ra hosts <<<"$Z_REMOTE_HOSTS"
+  elif [[ -f "$HOME/.config/z/remotes" ]]; then
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && hosts+=("$line")
+    done <"$HOME/.config/z/remotes"
+  fi
+
+  for host in "${hosts[@]}"; do
+    local remote_paths
+    remote_paths="$(ssh -o ConnectTimeout=2 "$host" \
+      "find ~/eng*/worktrees -mindepth 2 -maxdepth 3 -type d 2>/dev/null | sed \"s|^\$HOME/||\"" \
+      2>/dev/null)" || continue
+
+    while IFS= read -r remote_path; do
+      [[ -z "$remote_path" ]] && continue
+      IFS=/ read -ra path_parts <<<"$remote_path"
+
+      if [[ "${#path_parts[@]}" -eq 3 ]]; then
+        printf "%s:%s/\t%s\n" "$host" "$remote_path" "remote: new worktree"
+      elif [[ "${#path_parts[@]}" -eq 4 ]]; then
+        printf "%s:%s\t%s\n" "$host" "$remote_path" "remote: existing worktree"
+      fi
+    done <<<"$remote_paths"
+  done
+}
+
+z_completions_local
+z_completions_remote

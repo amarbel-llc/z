@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+z_parse_target() {
+  local target="$1"
+
+  if [[ "$target" == *:* ]]; then
+    IFS=: read -r host path <<<"$target"
+    echo "$host"
+    echo "$path"
+  else
+    echo ""
+    echo "$target"
+  fi
+}
+
+z_attach_remote() {
+  local host="$1"
+  local path="$2"
+
+  gum log -t info "connecting to remote session on $host: $path"
+  ssh -t "$host" "zmx attach $path"
+}
+
+z_post_zmx() {
+  local z_path="$1"
+  IFS=/ read -ra arg_path_components <<<"$z_path"
+
+  if [[ "${arg_path_components[1]}" != "worktrees" ]]; then
+    return 0
+  fi
+
+  local eng_area="${arg_path_components[0]}"
+  local repo="${arg_path_components[2]}"
+  local worktree="${arg_path_components[3]}"
+
+  local repo_path="$HOME/$eng_area/repos/$repo"
+  local worktree_path="$HOME/$z_path"
+
+  local default_branch
+  default_branch="$(git -C "$repo_path" branch --show-current)"
+
+  if [[ -z "$default_branch" ]]; then
+    gum log -t warn "could not determine default branch"
+    return 0
+  fi
+
+  local action
+  action="$(gum choose --header "Post-zmx actions for $worktree:" \
+    "Pull + Rebase + Merge + Remove worktree + Push" \
+    "Rebase + Merge + Remove worktree + Push" \
+    "Rebase + Merge + Remove worktree" \
+    "Rebase + Merge" \
+    "Rebase")" || true
+
+  if [[ -z "$action" ]]; then
+    return 0
+  fi
+
+  if [[ "$action" == Pull* ]]; then
+    if ! git -C "$repo_path" pull; then
+      gum log -t error "pull failed"
+      return 1
+    fi
+    gum log -t info "pulled $default_branch from origin"
+  fi
+
+  if ! git -C "$worktree_path" rebase "$default_branch"; then
+    gum log -t error "rebase failed"
+    return 1
+  fi
+  gum log -t info "rebased $worktree onto $default_branch"
+
+  if [[ "$action" == *Rebase ]]; then
+    return 0
+  fi
+
+  if ! git -C "$repo_path" merge "$worktree" --ff-only; then
+    gum log -t error "merge failed (not fast-forward)"
+    return 1
+  fi
+  gum log -t info "merged $worktree into $default_branch"
+
+  if [[ "$action" == *Merge ]]; then
+    return 0
+  fi
+
+  git -C "$repo_path" worktree remove "$HOME/$z_path"
+  gum log -t info "removed worktree $worktree"
+
+  if ! git -C "$repo_path" branch -d "$worktree"; then
+    gum log -t error "failed to delete branch $worktree"
+    return 1
+  fi
+  gum log -t info "deleted branch $worktree"
+
+  if [[ "$action" == *"Remove worktree" ]]; then
+    return 0
+  fi
+
+  if ! git -C "$repo_path" push origin "$default_branch"; then
+    gum log -t error "push failed"
+    return 1
+  fi
+  gum log -t info "pushed $default_branch to origin"
+}
+
+z_has_session() {
+  zmx list | awk '{split($1, a, "="); print a[2]}' | grep -q "$1" >/dev/null
+}
+
+z_create_worktree() {
+  local eng_area="$1"
+  local repo_path="$2"
+  local worktree_path="$3"
+
+  mkdir -p "$worktree_path"
+  git -C "$repo_path" worktree add "$worktree_path"
+  z_apply_rcm_worktrees_overlay "$eng_area" "$worktree_path"
+}
+
+z_apply_rcm_worktrees_overlay() {
+  local eng_area="$1"
+  local worktree_path="$2"
+
+  local rcm_worktrees="$HOME/$eng_area/rcm-worktrees"
+  if [[ ! -d "$rcm_worktrees" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r src; do
+    local rel="${src#"$rcm_worktrees/"}"
+    local dest="$worktree_path/.$rel"
+    if [[ ! -f "$dest" ]]; then
+      mkdir -p "$(dirname "$dest")"
+      cp "$src" "$dest"
+    fi
+  done < <(find "$rcm_worktrees" -type f)
+}
+
+z_attach_existing() {
+  local z_path="$1"
+
+  zmx attach "$z_path" || true
+  z_post_zmx "$z_path"
+}
+
+z_attach_to_path() {
+  local z_path="$1"
+  IFS=/ read -ra arg_path_components <<<"$z_path"
+
+  local eng_area="${arg_path_components[0]}"
+  local repo="${arg_path_components[2]}"
+
+  if [[ "${arg_path_components[1]}" != "worktrees" ]]; then
+    gum log -t error "invalid path provided: $z_path"
+    return 1
+  fi
+
+  local repo_path="$HOME/$eng_area/repos/$repo"
+  local worktree_path="$HOME/$z_path"
+
+  z_create_worktree "$eng_area" "$repo_path" "$worktree_path"
+
+  cd "$worktree_path"
+  zmx attach "$z_path" || true
+
+  z_post_zmx "$z_path"
+}
+
+z_main() {
+  case "$#" in
+    0)
+      local z_path="${PWD#"$HOME"/}"
+      z_attach_to_path "$z_path"
+      ;;
+    1)
+      local target="$1"
+      local parse_result
+      parse_result="$(z_parse_target "$target")"
+      local host path
+      host="$(sed -n '1p' <<<"$parse_result")"
+      path="$(sed -n '2p' <<<"$parse_result")"
+
+      if [[ -n "$host" ]]; then
+        z_attach_remote "$host" "$path"
+        return $?
+      fi
+
+      if [[ -d "$HOME/$target" ]] || z_has_session "$target"; then
+        z_attach_existing "$target"
+        return $?
+      fi
+
+      z_attach_to_path "$target"
+      ;;
+    *)
+      gum log -t error "more than one argument provided"
+      return 1
+      ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  z_main "$@"
+fi
