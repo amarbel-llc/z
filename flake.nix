@@ -35,6 +35,13 @@
         runtimeDeps = with pkgs; [
           gum
         ];
+
+        shellCompletions = pkgs.runCommand "z-completions-files" { } ''
+          install -Dm644 ${./completions/z.bash-completion} \
+            $out/share/bash-completion/completions/z
+          install -Dm644 ${./completions/z.fish} \
+            $out/share/fish/vendor_completions.d/z.fish
+        '';
       in
       {
         packages.default = pkgs.symlinkJoin {
@@ -43,6 +50,7 @@
             z
             z-merge
             z-completions
+            shellCompletions
           ] ++ runtimeDeps;
           buildInputs = [ pkgs.makeWrapper ];
           postBuild = ''
