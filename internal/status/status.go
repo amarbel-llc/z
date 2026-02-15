@@ -182,7 +182,7 @@ func Render(rows []BranchStatus) string {
 
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("8"))).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("15"))).
 		Headers(headers...).
 		Rows(data...).
 		StyleFunc(func(row, col int) lipgloss.Style {
@@ -207,7 +207,7 @@ func Render(rows []BranchStatus) string {
 				}
 				return styleDim
 			case 4, 5: // dates
-				return styleDim
+				return lipgloss.NewStyle()
 			}
 
 			return lipgloss.NewStyle()
