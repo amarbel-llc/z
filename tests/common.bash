@@ -13,8 +13,8 @@ pushd "$BATS_TEST_TMPDIR" >/dev/null || exit 1
 PROJECT_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 if [[ -x "$PROJECT_DIR/result/bin/sweatshop" ]]; then
   BIN_DIR="$PROJECT_DIR/result/bin"
-elif [[ -x "$PROJECT_DIR/sweatshop" ]]; then
-  BIN_DIR="$PROJECT_DIR"
+elif [[ -x "$PROJECT_DIR/build/sweatshop" ]]; then
+  BIN_DIR="$PROJECT_DIR/build"
 else
   echo "sweatshop binary not found. Run 'just build' or 'just build-go' first." >&2
   exit 1

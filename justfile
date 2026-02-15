@@ -9,7 +9,7 @@ build:
 
 # Build Go binary directly
 build-go: build-gomod2nix
-    nix develop --command go build -o sweatshop ./cmd/sweatshop
+    nix develop --command go build -o build/sweatshop ./cmd/sweatshop
 
 # Regenerate gomod2nix.toml
 build-gomod2nix:
@@ -38,4 +38,4 @@ deps:
 
 # Clean build artifacts
 clean:
-    rm -rf result sweatshop
+    rm -rf result build/
