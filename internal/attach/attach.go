@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/log"
 
+	"github.com/amarbel-llc/sweatshop/internal/flake"
 	"github.com/amarbel-llc/sweatshop/internal/git"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
@@ -54,7 +55,13 @@ func ToPath(sweatshopPath string) error {
 		return fmt.Errorf("changing to worktree: %w", err)
 	}
 
-	cmd := exec.Command("zmx", "attach", sweatshopPath)
+	zmxArgs := []string{"attach", sweatshopPath}
+	if flake.HasDevShell(worktreePath) {
+		log.Info("flake.nix detected, starting session in nix develop")
+		zmxArgs = append(zmxArgs, "nix", "develop", "--command", os.Getenv("SHELL"))
+	}
+
+	cmd := exec.Command("zmx", zmxArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
