@@ -152,10 +152,6 @@ z_post_zmx() {
   fi
 }
 
-z_has_session() {
-  zmx list | awk '{split($1, a, "="); print a[2]}' | grep -q "$1" >/dev/null
-}
-
 z_create_worktree() {
   local eng_area="$1"
   local repo_path="$2"
@@ -221,7 +217,7 @@ z_main() {
     0)
       local z_path="${PWD#"$HOME"/}"
 
-      if [[ -d "$HOME/$z_path" ]] || z_has_session "$z_path"; then
+      if [[ -d "$HOME/$z_path" ]]; then
         z_attach_existing "$z_path"
       else
         z_attach_to_path "$z_path"
@@ -240,7 +236,7 @@ z_main() {
         return $?
       fi
 
-      if [[ -d "$HOME/$target" ]] || z_has_session "$target"; then
+      if [[ -d "$HOME/$target" ]]; then
         z_attach_existing "$target"
         return $?
       fi
