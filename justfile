@@ -1,4 +1,4 @@
-# z - git worktree session manager
+# sweatshop - git worktree session manager
 
 default:
     @just --list
@@ -17,11 +17,11 @@ test:
 
 # Check with shellcheck
 check:
-    nix develop --command shellcheck bin/z bin/z-merge bin/z-completions
+    nix develop --command shellcheck bin/sweatshop bin/sweatshop-merge bin/sweatshop-completions
 
 # Format with shfmt
 fmt:
-    nix develop --command shfmt -w -i 2 -ci bin/z bin/z-merge bin/z-completions
+    nix develop --command shfmt -w -i 2 -ci bin/sweatshop bin/sweatshop-merge bin/sweatshop-completions
 
 # Clean build artifacts
 clean:

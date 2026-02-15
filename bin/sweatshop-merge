@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-z_merge_main() {
+sweatshop_merge_main() {
   local current_path="${PWD#"$HOME"/}"
   IFS=/ read -ra arg_path_components <<<"$current_path"
 
@@ -37,5 +37,5 @@ z_merge_main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  z_merge_main "$@"
+  sweatshop_merge_main "$@"
 fi

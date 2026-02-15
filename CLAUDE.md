@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`z` is a shell-agnostic git worktree session manager that wraps `zmx` (a terminal multiplexer session manager). It manages the lifecycle of git worktrees: creating them in a convention-based directory structure, attaching to terminal sessions via zmx, and offering post-session workflows (rebase, merge, cleanup, push). Supports both local and remote (SSH) worktrees.
+`sweatshop` is a shell-agnostic git worktree session manager that wraps `zmx` (a terminal multiplexer session manager). It manages the lifecycle of git worktrees: creating them in a convention-based directory structure, attaching to terminal sessions via zmx, and offering post-session workflows (rebase, merge, cleanup, push). Supports both local and remote (SSH) worktrees.
 
 ## Commands
 
@@ -22,9 +22,9 @@ Run a single test file: `nix develop --command bats tests/test_parse_target.bats
 
 Three Bash scripts in `bin/`, packaged via Nix with `writeScriptBin` + `symlinkJoin`:
 
-- **`z`** — Main entry point. Parses `[host:]path` targets, creates worktrees, attaches zmx sessions, and presents interactive post-session menus (via `gum choose`). All functions prefixed `z_`.
-- **`z-merge`** — Run from inside a worktree. Merges branch into main with `--no-ff`, removes the worktree, and detaches from zmx.
-- **`z-completions`** — Generates tab-separated completions by scanning `~/eng*/repos/` (local) and querying `Z_REMOTE_HOSTS` or `~/.config/z/remotes` (remote via SSH).
+- **`sweatshop`** — Main entry point. Parses `[host:]path` targets, creates worktrees, attaches zmx sessions, and presents interactive post-session menus (via `gum choose`). All functions prefixed `sweatshop_`.
+- **`sweatshop-merge`** — Run from inside a worktree. Merges branch into main with `--no-ff`, removes the worktree, and detaches from zmx.
+- **`sweatshop-completions`** — Generates tab-separated completions by scanning `~/eng*/repos/` (local) and querying `SWEATSHOP_REMOTE_HOSTS` or `~/.config/sweatshop/remotes` (remote via SSH).
 
 ### Convention-based directory layout
 

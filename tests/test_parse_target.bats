@@ -5,12 +5,12 @@ setup() {
   export output
   setup_test_home
   setup_mock_path
-  source "$BIN_DIR/z"
+  source "$BIN_DIR/sweatshop"
 }
 
 function parse_local_path { # @test
   local result
-  result="$(z_parse_target "eng/worktrees/myrepo/mybranch")"
+  result="$(sweatshop_parse_target "eng/worktrees/myrepo/mybranch")"
   local host path
   host="$(sed -n '1p' <<<"$result")"
   path="$(sed -n '2p' <<<"$result")"
@@ -21,7 +21,7 @@ function parse_local_path { # @test
 
 function parse_remote_target { # @test
   local result
-  result="$(z_parse_target "vm-host:eng/worktrees/myrepo/mybranch")"
+  result="$(sweatshop_parse_target "vm-host:eng/worktrees/myrepo/mybranch")"
   local host path
   host="$(sed -n '1p' <<<"$result")"
   path="$(sed -n '2p' <<<"$result")"
@@ -32,7 +32,7 @@ function parse_remote_target { # @test
 
 function parse_target_without_colon_returns_empty_host { # @test
   local result
-  result="$(z_parse_target "simple/path")"
+  result="$(sweatshop_parse_target "simple/path")"
   local host path
   host="$(sed -n '1p' <<<"$result")"
   path="$(sed -n '2p' <<<"$result")"
@@ -43,7 +43,7 @@ function parse_target_without_colon_returns_empty_host { # @test
 
 function parse_target_preserves_remote_path { # @test
   local result
-  result="$(z_parse_target "myhost:eng2/worktrees/dodder/feature-x")"
+  result="$(sweatshop_parse_target "myhost:eng2/worktrees/dodder/feature-x")"
   local host path
   host="$(sed -n '1p' <<<"$result")"
   path="$(sed -n '2p' <<<"$result")"

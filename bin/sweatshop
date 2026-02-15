@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-z_parse_target() {
+sweatshop_parse_target() {
   local target="$1"
 
   if [[ "$target" == *:* ]]; then
@@ -14,7 +14,7 @@ z_parse_target() {
   fi
 }
 
-z_attach_remote() {
+sweatshop_attach_remote() {
   local host="$1"
   local path="$2"
 
@@ -22,9 +22,9 @@ z_attach_remote() {
   ssh -t "$host" "zmx attach $path"
 }
 
-z_post_zmx() {
-  local z_path="$1"
-  IFS=/ read -ra arg_path_components <<<"$z_path"
+sweatshop_post_zmx() {
+  local sweatshop_path="$1"
+  IFS=/ read -ra arg_path_components <<<"$sweatshop_path"
 
   if [[ "${arg_path_components[1]}" != "worktrees" ]]; then
     return 0
@@ -35,7 +35,7 @@ z_post_zmx() {
   local worktree="${arg_path_components[3]}"
 
   local repo_path="$HOME/$eng_area/repos/$repo"
-  local worktree_path="$HOME/$z_path"
+  local worktree_path="$HOME/$sweatshop_path"
 
   local default_branch
   default_branch="$(git -C "$repo_path" branch --show-current)"
@@ -107,7 +107,7 @@ z_post_zmx() {
   # Stash any tracked changes in the repo before merging
   local repo_stashed=false
   if ! git -C "$repo_path" diff --quiet 2>/dev/null || ! git -C "$repo_path" diff --cached --quiet 2>/dev/null; then
-    git -C "$repo_path" stash push -m "z: auto-stash before merge of $worktree"
+    git -C "$repo_path" stash push -m "sweatshop: auto-stash before merge of $worktree"
     repo_stashed=true
     gum log -t info "stashed changes in $repo_path"
   fi
@@ -133,7 +133,7 @@ z_post_zmx() {
   fi
 
   if [[ "$action" == *"Remove worktree"* ]]; then
-    git -C "$repo_path" worktree remove "$HOME/$z_path"
+    git -C "$repo_path" worktree remove "$HOME/$sweatshop_path"
     gum log -t info "removed worktree $worktree"
 
     if ! git -C "$repo_path" branch -D "$worktree"; then
@@ -152,7 +152,7 @@ z_post_zmx() {
   fi
 }
 
-z_create_worktree() {
+sweatshop_create_worktree() {
   local eng_area="$1"
   local repo_path="$2"
   local worktree_path="$3"
@@ -160,10 +160,10 @@ z_create_worktree() {
   mkdir -p "$worktree_path"
   git -C "$repo_path" worktree add "$worktree_path"
 
-  z_apply_rcm_worktrees_overlay "$eng_area" "$worktree_path"
+  sweatshop_apply_rcm_worktrees_overlay "$eng_area" "$worktree_path"
 }
 
-z_apply_rcm_worktrees_overlay() {
+sweatshop_apply_rcm_worktrees_overlay() {
   local eng_area="$1"
   local worktree_path="$2"
 
@@ -182,37 +182,37 @@ z_apply_rcm_worktrees_overlay() {
   done < <(find "$rcm_worktrees" -type f)
 }
 
-z_attach_existing() {
-  local z_path="$1"
+sweatshop_attach_existing() {
+  local sweatshop_path="$1"
 
-  zmx attach "$z_path" || true
-  z_post_zmx "$z_path"
+  zmx attach "$sweatshop_path" || true
+  sweatshop_post_zmx "$sweatshop_path"
 }
 
-z_attach_to_path() {
-  local z_path="$1"
-  IFS=/ read -ra arg_path_components <<<"$z_path"
+sweatshop_attach_to_path() {
+  local sweatshop_path="$1"
+  IFS=/ read -ra arg_path_components <<<"$sweatshop_path"
 
   local eng_area="${arg_path_components[0]}"
   local repo="${arg_path_components[2]}"
 
   if [[ "${arg_path_components[1]}" != "worktrees" ]]; then
-    gum log -t error "invalid path provided: $z_path"
+    gum log -t error "invalid path provided: $sweatshop_path"
     return 1
   fi
 
   local repo_path="$HOME/$eng_area/repos/$repo"
-  local worktree_path="$HOME/$z_path"
+  local worktree_path="$HOME/$sweatshop_path"
 
-  z_create_worktree "$eng_area" "$repo_path" "$worktree_path"
+  sweatshop_create_worktree "$eng_area" "$repo_path" "$worktree_path"
 
   cd "$worktree_path"
-  zmx attach "$z_path" || true
+  zmx attach "$sweatshop_path" || true
 
-  z_post_zmx "$z_path"
+  sweatshop_post_zmx "$sweatshop_path"
 }
 
-z_status_branch() {
+sweatshop_status_branch() {
   local branch_path="$1"
   local branch_name="$2"
   local indent="${3:-  }"
@@ -286,7 +286,7 @@ z_status_branch() {
     "$indent" "$branch_name" "$dirty" "$remote_status" "$last_commit" "$last_modified"
 }
 
-z_status_repo() {
+sweatshop_status_repo() {
   local eng_area="$1"
   local repo="$2"
   local repo_path="$HOME/$eng_area/repos/$repo"
@@ -301,7 +301,7 @@ z_status_repo() {
   main_branch="$(git -C "$repo_path" branch --show-current 2>/dev/null)" || main_branch=""
 
   if [[ -n "$main_branch" ]]; then
-    z_status_branch "$repo_path" "$main_branch"
+    sweatshop_status_branch "$repo_path" "$main_branch"
   fi
 
   local worktrees_dir="$HOME/$eng_area/worktrees/$repo"
@@ -311,12 +311,12 @@ z_status_repo() {
       [[ -d "$worktree" ]] || continue
       local wt_name
       wt_name="$(basename "$worktree")"
-      z_status_branch "$worktree" "$wt_name" "    "
+      sweatshop_status_branch "$worktree" "$wt_name" "    "
     done
   fi
 }
 
-z_status() {
+sweatshop_status() {
   local found=false
 
   local eng_dir
@@ -330,7 +330,7 @@ z_status() {
       [[ -d "$repo_dir" ]] || continue
       local repo
       repo="$(basename "$repo_dir")"
-      z_status_repo "$eng_area" "$repo"
+      sweatshop_status_repo "$eng_area" "$repo"
       found=true
     done
   done
@@ -340,44 +340,44 @@ z_status() {
   fi
 }
 
-z_usage() {
-  gum log -t error "usage: z <subcommand> [args]"
+sweatshop_usage() {
+  gum log -t error "usage: sweatshop <subcommand> [args]"
   gum log -t info "subcommands:"
   gum log -t info "  attach [target]  attach to a worktree session"
   gum log -t info "  status           show status of all repos and worktrees"
   return 1
 }
 
-z_attach() {
+sweatshop_attach() {
   case "$#" in
     0)
-      local z_path="${PWD#"$HOME"/}"
+      local sweatshop_path="${PWD#"$HOME"/}"
 
-      if [[ -d "$HOME/$z_path" ]]; then
-        z_attach_existing "$z_path"
+      if [[ -d "$HOME/$sweatshop_path" ]]; then
+        sweatshop_attach_existing "$sweatshop_path"
       else
-        z_attach_to_path "$z_path"
+        sweatshop_attach_to_path "$sweatshop_path"
       fi
       ;;
     1)
       local target="$1"
       local parse_result
-      parse_result="$(z_parse_target "$target")"
+      parse_result="$(sweatshop_parse_target "$target")"
       local host path
       host="$(sed -n '1p' <<<"$parse_result")"
       path="$(sed -n '2p' <<<"$parse_result")"
 
       if [[ -n "$host" ]]; then
-        z_attach_remote "$host" "$path"
+        sweatshop_attach_remote "$host" "$path"
         return $?
       fi
 
       if [[ -d "$HOME/$target" ]]; then
-        z_attach_existing "$target"
+        sweatshop_attach_existing "$target"
         return $?
       fi
 
-      z_attach_to_path "$target"
+      sweatshop_attach_to_path "$target"
       ;;
     *)
       gum log -t error "more than one argument provided"
@@ -386,24 +386,24 @@ z_attach() {
   esac
 }
 
-z_main() {
+sweatshop_main() {
   local subcommand="${1:-}"
 
   case "$subcommand" in
     attach)
       shift
-      z_attach "$@"
+      sweatshop_attach "$@"
       ;;
     status)
       shift
-      z_status "$@"
+      sweatshop_status "$@"
       ;;
     *)
-      z_usage
+      sweatshop_usage
       ;;
   esac
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  z_main "$@"
+  sweatshop_main "$@"
 fi

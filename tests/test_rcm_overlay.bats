@@ -5,7 +5,7 @@ setup() {
   export output
   setup_test_home
   setup_mock_path
-  source "$BIN_DIR/z"
+  source "$BIN_DIR/sweatshop"
 }
 
 function overlay_copies_files_as_dotfiles { # @test
@@ -16,7 +16,7 @@ function overlay_copies_files_as_dotfiles { # @test
   local worktree="$HOME/eng/worktrees/myrepo/feature-x"
   mkdir -p "$worktree"
 
-  z_apply_rcm_worktrees_overlay "eng" "$worktree"
+  sweatshop_apply_rcm_worktrees_overlay "eng" "$worktree"
 
   [[ -f "$worktree/.config/git/ignore" ]]
   [[ "$(cat "$worktree/.config/git/ignore")" == "some-config" ]]
@@ -31,7 +31,7 @@ function overlay_does_not_overwrite_existing_files { # @test
   mkdir -p "$worktree"
   echo "existing-content" >"$worktree/.gitignore"
 
-  z_apply_rcm_worktrees_overlay "eng" "$worktree"
+  sweatshop_apply_rcm_worktrees_overlay "eng" "$worktree"
 
   [[ "$(cat "$worktree/.gitignore")" == "existing-content" ]]
 }
@@ -41,7 +41,7 @@ function overlay_skips_when_rcm_worktrees_missing { # @test
   mkdir -p "$worktree"
 
   # Should not error when rcm-worktrees doesn't exist
-  run z_apply_rcm_worktrees_overlay "eng" "$worktree"
+  run sweatshop_apply_rcm_worktrees_overlay "eng" "$worktree"
   [[ "$status" -eq 0 ]]
 }
 
@@ -54,7 +54,7 @@ function overlay_handles_multiple_files { # @test
   local worktree="$HOME/eng/worktrees/myrepo/feature-x"
   mkdir -p "$worktree"
 
-  z_apply_rcm_worktrees_overlay "eng" "$worktree"
+  sweatshop_apply_rcm_worktrees_overlay "eng" "$worktree"
 
   [[ -f "$worktree/.gitignore" ]]
   [[ -f "$worktree/.config/foo" ]]

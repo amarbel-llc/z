@@ -20,7 +20,7 @@ fi
 MOCK
   chmod +x "$MOCK_BIN/gum"
 
-  source "$BIN_DIR/z"
+  source "$BIN_DIR/sweatshop"
 }
 
 create_mock_repo() {
@@ -34,7 +34,7 @@ function status_discovers_repos_across_eng_areas { # @test
   create_mock_repo "$HOME/eng/repos/repo-a"
   create_mock_repo "$HOME/eng2/repos/repo-b"
 
-  run z_status
+  run sweatshop_status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"eng/repos/repo-a"* ]]
   [[ "$output" == *"eng2/repos/repo-b"* ]]
@@ -43,7 +43,7 @@ function status_discovers_repos_across_eng_areas { # @test
 function status_handles_repos_with_no_worktrees { # @test
   create_mock_repo "$HOME/eng/repos/solo-repo"
 
-  run z_status
+  run sweatshop_status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"eng/repos/solo-repo"* ]]
   # Should show main branch info
@@ -57,7 +57,7 @@ function status_handles_repos_with_worktrees { # @test
   mkdir -p "$(dirname "$worktree_path")"
   git -C "$HOME/eng/repos/myrepo" worktree add -q "$worktree_path"
 
-  run z_status
+  run sweatshop_status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"eng/repos/myrepo"* ]]
   [[ "$output" == *"feature-x"* ]]
@@ -66,7 +66,7 @@ function status_handles_repos_with_worktrees { # @test
 function status_shows_clean_for_clean_repo { # @test
   create_mock_repo "$HOME/eng/repos/clean-repo"
 
-  run z_status_branch "$HOME/eng/repos/clean-repo" "main"
+  run sweatshop_status_branch "$HOME/eng/repos/clean-repo" "main"
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"clean"* ]]
 }
@@ -75,14 +75,14 @@ function status_shows_dirty_count { # @test
   create_mock_repo "$HOME/eng/repos/dirty-repo"
   echo "change" >"$HOME/eng/repos/dirty-repo/file.txt"
 
-  run z_status_branch "$HOME/eng/repos/dirty-repo" "main"
+  run sweatshop_status_branch "$HOME/eng/repos/dirty-repo" "main"
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"1?"* ]]
 }
 
 function status_shows_no_repos_message { # @test
   # Empty HOME, no eng* dirs
-  run z_status
+  run sweatshop_status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"no repos found"* ]]
 }
@@ -90,7 +90,7 @@ function status_shows_no_repos_message { # @test
 function status_skips_non_git_directories { # @test
   mkdir -p "$HOME/eng/repos/not-a-repo"
 
-  run z_status
+  run sweatshop_status
   [[ "$status" -eq 0 ]]
   # Should not show the non-git directory
   [[ "$output" != *"not-a-repo"* ]]

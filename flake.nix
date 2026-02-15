@@ -28,33 +28,33 @@
             buildCommand = "${old.buildCommand}\n patchShebangs $out";
           });
 
-        z = mkScript "z" ./bin/z;
-        z-merge = mkScript "z-merge" ./bin/z-merge;
-        z-completions = mkScript "z-completions" ./bin/z-completions;
+        sweatshop = mkScript "sweatshop" ./bin/sweatshop;
+        sweatshop-merge = mkScript "sweatshop-merge" ./bin/sweatshop-merge;
+        sweatshop-completions = mkScript "sweatshop-completions" ./bin/sweatshop-completions;
 
         runtimeDeps = with pkgs; [
           gum
         ];
 
-        shellCompletions = pkgs.runCommand "z-completions-files" { } ''
-          install -Dm644 ${./completions/z.bash-completion} \
-            $out/share/bash-completion/completions/z
-          install -Dm644 ${./completions/z.fish} \
-            $out/share/fish/vendor_completions.d/z.fish
+        shellCompletions = pkgs.runCommand "sweatshop-completions-files" { } ''
+          install -Dm644 ${./completions/sweatshop.bash-completion} \
+            $out/share/bash-completion/completions/sweatshop
+          install -Dm644 ${./completions/sweatshop.fish} \
+            $out/share/fish/vendor_completions.d/sweatshop.fish
         '';
       in
       {
         packages.default = pkgs.symlinkJoin {
-          name = "z";
+          name = "sweatshop";
           paths = [
-            z
-            z-merge
-            z-completions
+            sweatshop
+            sweatshop-merge
+            sweatshop-completions
             shellCompletions
           ] ++ runtimeDeps;
           buildInputs = [ pkgs.makeWrapper ];
           postBuild = ''
-            for bin in z z-merge z-completions; do
+            for bin in sweatshop sweatshop-merge sweatshop-completions; do
               wrapProgram $out/bin/$bin --prefix PATH : $out/bin
             done
           '';
@@ -71,13 +71,13 @@
           ];
 
           shellHook = ''
-            echo "z - dev environment"
+            echo "sweatshop - dev environment"
           '';
         };
 
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/z";
+          program = "${self.packages.${system}.default}/bin/sweatshop";
         };
       }
     );

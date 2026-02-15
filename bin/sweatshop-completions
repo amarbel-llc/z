@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-z_completions_local() {
+sweatshop_completions_local() {
   for area_path in "$HOME"/eng*; do
     [[ -d "$area_path" ]] || continue
     local area="${area_path#"$HOME"/}"
@@ -20,15 +20,15 @@ z_completions_local() {
   done
 }
 
-z_completions_remote() {
+sweatshop_completions_remote() {
   local hosts=()
 
-  if [[ -n "${Z_REMOTE_HOSTS:-}" ]]; then
-    IFS=: read -ra hosts <<<"$Z_REMOTE_HOSTS"
-  elif [[ -f "$HOME/.config/z/remotes" ]]; then
+  if [[ -n "${SWEATSHOP_REMOTE_HOSTS:-}" ]]; then
+    IFS=: read -ra hosts <<<"$SWEATSHOP_REMOTE_HOSTS"
+  elif [[ -f "$HOME/.config/sweatshop/remotes" ]]; then
     while IFS= read -r line; do
       [[ -n "$line" ]] && hosts+=("$line")
-    done <"$HOME/.config/z/remotes"
+    done <"$HOME/.config/sweatshop/remotes"
   fi
 
   for host in "${hosts[@]}"; do
@@ -50,5 +50,5 @@ z_completions_remote() {
   done
 }
 
-z_completions_local
-z_completions_remote
+sweatshop_completions_local
+sweatshop_completions_remote
