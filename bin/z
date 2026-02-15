@@ -45,13 +45,42 @@ z_post_zmx() {
     return 0
   fi
 
+  # Check for commits ahead of default branch
+  local commits_ahead
+  commits_ahead="$(git -C "$worktree_path" rev-list "$default_branch..$worktree" --count 2>/dev/null)" || commits_ahead="0"
+
+  # Check for uncommitted changes (staged, unstaged, untracked) in the worktree
+  local worktree_status
+  worktree_status="$(git -C "$worktree_path" status --porcelain 2>/dev/null)" || worktree_status=""
+
+  # If no commits ahead and no uncommitted changes, exit cleanly
+  if [[ "$commits_ahead" -eq 0 && -z "$worktree_status" ]]; then
+    gum log -t info "no changes in worktree $worktree"
+    return 0
+  fi
+
+  local has_uncommitted=false
+  if [[ -n "$worktree_status" ]]; then
+    has_uncommitted=true
+    gum log -t warn "worktree $worktree has uncommitted changes:"
+    git -C "$worktree_path" status --short
+  fi
+
   local action
-  action="$(gum choose --header "Post-zmx actions for $worktree:" \
-    "Pull + Rebase + Merge + Remove worktree + Push" \
-    "Rebase + Merge + Remove worktree + Push" \
-    "Rebase + Merge + Remove worktree" \
-    "Rebase + Merge" \
-    "Rebase")" || true
+  if [[ "$has_uncommitted" == true ]]; then
+    action="$(gum choose --header "Post-zmx actions for $worktree (uncommitted changes, will not remove worktree):" \
+      "Pull + Rebase + Merge + Push" \
+      "Rebase + Merge + Push" \
+      "Rebase + Merge" \
+      "Rebase")" || true
+  else
+    action="$(gum choose --header "Post-zmx actions for $worktree:" \
+      "Pull + Rebase + Merge + Remove worktree + Push" \
+      "Rebase + Merge + Remove worktree + Push" \
+      "Rebase + Merge + Remove worktree" \
+      "Rebase + Merge" \
+      "Rebase")" || true
+  fi
 
   if [[ -z "$action" ]]; then
     return 0
@@ -75,34 +104,52 @@ z_post_zmx() {
     return 0
   fi
 
+  # Stash any tracked changes in the repo before merging
+  local repo_stashed=false
+  if ! git -C "$repo_path" diff --quiet 2>/dev/null || ! git -C "$repo_path" diff --cached --quiet 2>/dev/null; then
+    git -C "$repo_path" stash push -m "z: auto-stash before merge of $worktree"
+    repo_stashed=true
+    gum log -t info "stashed changes in $repo_path"
+  fi
+
   if ! git -C "$repo_path" merge "$worktree" --ff-only; then
     gum log -t error "merge failed (not fast-forward)"
+    if [[ "$repo_stashed" == true ]]; then
+      git -C "$repo_path" stash pop
+      gum log -t info "restored stashed changes in $repo_path"
+    fi
     return 1
   fi
   gum log -t info "merged $worktree into $default_branch"
+
+  # Restore stashed changes in repo
+  if [[ "$repo_stashed" == true ]]; then
+    git -C "$repo_path" stash pop
+    gum log -t info "restored stashed changes in $repo_path"
+  fi
 
   if [[ "$action" == *Merge ]]; then
     return 0
   fi
 
-  git -C "$repo_path" worktree remove "$HOME/$z_path"
-  gum log -t info "removed worktree $worktree"
+  if [[ "$action" == *"Remove worktree"* ]]; then
+    git -C "$repo_path" worktree remove "$HOME/$z_path"
+    gum log -t info "removed worktree $worktree"
 
-  if ! git -C "$repo_path" branch -d "$worktree"; then
-    gum log -t error "failed to delete branch $worktree"
-    return 1
-  fi
-  gum log -t info "deleted branch $worktree"
-
-  if [[ "$action" == *"Remove worktree" ]]; then
-    return 0
+    if ! git -C "$repo_path" branch -d "$worktree"; then
+      gum log -t error "failed to delete branch $worktree"
+      return 1
+    fi
+    gum log -t info "deleted branch $worktree"
   fi
 
-  if ! git -C "$repo_path" push origin "$default_branch"; then
-    gum log -t error "push failed"
-    return 1
+  if [[ "$action" == *Push ]]; then
+    if ! git -C "$repo_path" push origin "$default_branch"; then
+      gum log -t error "push failed"
+      return 1
+    fi
+    gum log -t info "pushed $default_branch to origin"
   fi
-  gum log -t info "pushed $default_branch to origin"
 }
 
 z_has_session() {
