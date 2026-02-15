@@ -331,8 +331,12 @@ sweatshop_status() {
       [[ -d "$repo_dir" ]] || continue
       local repo
       repo="$(basename "$repo_dir")"
-      rows+="$(sweatshop_status_repo "$eng_area" "$repo")"
-      found=true
+      local repo_rows
+      repo_rows="$(sweatshop_status_repo "$eng_area" "$repo")"
+      if [[ -n "$repo_rows" ]]; then
+        rows+="${repo_rows}"$'\n'
+        found=true
+      fi
     done
   done
 
@@ -342,7 +346,7 @@ sweatshop_status() {
   fi
 
   printf "Repo\tBranch\tStatus\tRemote\tCommit\tModified\n%s" "$rows" |
-    gum table -s $'\t'
+    gum table -p -s $'\t'
 }
 
 sweatshop_usage() {

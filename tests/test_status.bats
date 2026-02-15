@@ -6,19 +6,19 @@ setup() {
   setup_test_home
   setup_mock_path
 
-  # Mock gum to capture output without requiring it
-  cat >"$MOCK_BIN/gum" <<'MOCK'
+  # Mock gum log to capture output; all other subcommands use real gum
+  REAL_GUM="$(command -v gum)"
+  cat >"$MOCK_BIN/gum" <<MOCK
 #!/bin/bash
-if [[ "$1" == "log" ]]; then
+if [[ "\$1" == "log" ]]; then
   shift
   # Skip -t flag and its argument
-  while [[ "$1" == -* ]]; do
+  while [[ "\$1" == -* ]]; do
     shift 2
   done
-  echo "$*"
-elif [[ "$1" == "table" ]]; then
-  # Pass through stdin as-is for testing
-  cat
+  echo "\$*"
+else
+  exec "$REAL_GUM" "\$@"
 fi
 MOCK
   chmod +x "$MOCK_BIN/gum"
