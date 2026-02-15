@@ -181,7 +181,12 @@ z_main() {
   case "$#" in
     0)
       local z_path="${PWD#"$HOME"/}"
-      z_attach_to_path "$z_path"
+
+      if [[ -d "$HOME/$z_path" ]] || z_has_session "$z_path"; then
+        z_attach_existing "$z_path"
+      else
+        z_attach_to_path "$z_path"
+      fi
       ;;
     1)
       local target="$1"
