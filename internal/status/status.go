@@ -20,6 +20,7 @@ type BranchStatus struct {
 	Remote       string
 	LastCommit   string
 	LastModified string
+	IsWorktree   bool
 }
 
 func CollectBranchStatus(repoLabel, branchPath, branchName string) BranchStatus {
@@ -133,7 +134,9 @@ func CollectRepoStatus(home, engArea, repo string) []BranchStatus {
 			continue
 		}
 		wtPath := filepath.Join(worktreesDir, entry.Name())
-		rows = append(rows, CollectBranchStatus(repoLabel, wtPath, entry.Name()))
+		bs := CollectBranchStatus(repoLabel, wtPath, entry.Name())
+		bs.IsWorktree = true
+		rows = append(rows, bs)
 	}
 
 	return rows
@@ -163,6 +166,10 @@ func CollectStatus(home string) []BranchStatus {
 	return all
 }
 
+func (bs BranchStatus) isClean() bool {
+	return bs.Dirty == "clean" && (strings.HasPrefix(bs.Remote, "≡") || bs.Remote == "")
+}
+
 var (
 	styleClean = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
 	styleDirty = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red
@@ -172,13 +179,8 @@ var (
 	styleBold  = lipgloss.NewStyle().Bold(true)
 )
 
-func Render(rows []BranchStatus) string {
+func renderTable(data [][]string) string {
 	headers := []string{"Repo", "Branch", "Status", "Remote", "Commit", "Modified"}
-
-	data := make([][]string, len(rows))
-	for i, r := range rows {
-		data[i] = []string{r.Repo, r.Branch, r.Dirty, r.Remote, r.LastCommit, r.LastModified}
-	}
 
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
@@ -214,4 +216,35 @@ func Render(rows []BranchStatus) string {
 		})
 
 	return t.Render()
+}
+
+var styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+
+func Render(rows []BranchStatus) string {
+	var repoRows, worktreeRows, cleanRows [][]string
+
+	for _, r := range rows {
+		row := []string{r.Repo, r.Branch, r.Dirty, r.Remote, r.LastCommit, r.LastModified}
+		if r.isClean() {
+			cleanRows = append(cleanRows, row)
+		} else if r.IsWorktree {
+			worktreeRows = append(worktreeRows, row)
+		} else {
+			repoRows = append(repoRows, row)
+		}
+	}
+
+	var sections []string
+
+	if len(repoRows) > 0 {
+		sections = append(sections, styleHeader.Render("Repos")+"\n"+renderTable(repoRows))
+	}
+	if len(worktreeRows) > 0 {
+		sections = append(sections, styleHeader.Render("Worktrees")+"\n"+renderTable(worktreeRows))
+	}
+	if len(cleanRows) > 0 {
+		sections = append(sections, styleHeader.Render("Clean")+"\n"+renderTable(cleanRows))
+	}
+
+	return strings.Join(sections, "\n\n")
 }

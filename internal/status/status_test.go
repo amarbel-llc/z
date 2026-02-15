@@ -57,6 +57,7 @@ func TestRenderProducesOutput(t *testing.T) {
 			Remote:       "↑3 origin/feature-x",
 			LastCommit:   "2025-01-02",
 			LastModified: "2025-01-02",
+			IsWorktree:   true,
 		},
 	}
 
@@ -69,5 +70,75 @@ func TestRenderProducesOutput(t *testing.T) {
 	}
 	if !strings.Contains(output, "myrepo") {
 		t.Error("expected 'myrepo' in output")
+	}
+}
+
+func TestRenderSectionHeaders(t *testing.T) {
+	rows := []BranchStatus{
+		{
+			Repo:       "eng/repos/dirty-repo",
+			Branch:     "main",
+			Dirty:      "1M",
+			Remote:     "↑1 origin/main",
+			IsWorktree: false,
+		},
+		{
+			Repo:       "eng/repos/dirty-repo",
+			Branch:     "feature",
+			Dirty:      "2M",
+			Remote:     "↑2 origin/feature",
+			IsWorktree: true,
+		},
+		{
+			Repo:       "eng/repos/clean-repo",
+			Branch:     "main",
+			Dirty:      "clean",
+			Remote:     "≡ origin/main",
+			IsWorktree: false,
+		},
+	}
+
+	output := Render(rows)
+	if !strings.Contains(output, "Repos") {
+		t.Error("expected 'Repos' section header")
+	}
+	if !strings.Contains(output, "Worktrees") {
+		t.Error("expected 'Worktrees' section header")
+	}
+	if !strings.Contains(output, "Clean") {
+		t.Error("expected 'Clean' section header")
+	}
+}
+
+func TestRenderCleanGrouping(t *testing.T) {
+	rows := []BranchStatus{
+		{
+			Repo:       "eng/repos/repo-a",
+			Branch:     "main",
+			Dirty:      "clean",
+			Remote:     "≡ origin/main",
+			IsWorktree: false,
+		},
+		{
+			Repo:       "eng/repos/repo-a",
+			Branch:     "feature",
+			Dirty:      "clean",
+			Remote:     "",
+			IsWorktree: true,
+		},
+	}
+
+	output := Render(rows)
+	if !strings.Contains(output, "Clean") {
+		t.Error("expected 'Clean' section header")
+	}
+	if strings.Contains(output, "Repos") {
+		t.Error("did not expect 'Repos' section when all rows are clean")
+	}
+	if strings.Contains(output, "Worktrees") {
+		t.Error("did not expect 'Worktrees' section when all rows are clean")
+	}
+	if !strings.Contains(output, "repo-a") {
+		t.Error("expected 'repo-a' in clean section")
 	}
 }
