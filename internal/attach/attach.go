@@ -131,6 +131,8 @@ func PostZmx(sweatshopPath, format string) error {
 
 	if action == "Abort" {
 		return Existing(sweatshopPath, format)
+	}
+
 	if tw != nil {
 		tw.PlanAhead(estimateSteps(action))
 	}

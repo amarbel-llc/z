@@ -37,7 +37,11 @@ func (tw *Writer) NotOk(description string, diagnostics map[string]string) int {
 			v := diagnostics[k]
 			if strings.Contains(v, "\n") {
 				fmt.Fprintf(tw.w, "  %s: |\n", k)
-				for _, line := range strings.Split(v, "\n") {
+				lines := strings.Split(v, "\n")
+				for len(lines) > 0 && lines[len(lines)-1] == "" {
+					lines = lines[:len(lines)-1]
+				}
+				for _, line := range lines {
 					fmt.Fprintf(tw.w, "    %s\n", line)
 				}
 			} else {

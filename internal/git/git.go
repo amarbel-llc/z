@@ -16,7 +16,7 @@ func Run(repoPath string, args ...string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, exitErr.Stderr)
+			return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, strings.TrimRight(string(exitErr.Stderr), "\n"))
 		}
 		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
