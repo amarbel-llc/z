@@ -212,7 +212,14 @@ z_attach_to_path() {
   z_post_zmx "$z_path"
 }
 
-z_main() {
+z_usage() {
+  gum log -t error "usage: z <subcommand> [args]"
+  gum log -t info "subcommands:"
+  gum log -t info "  attach [target]  attach to a worktree session"
+  return 1
+}
+
+z_attach() {
   case "$#" in
     0)
       local z_path="${PWD#"$HOME"/}"
@@ -246,6 +253,20 @@ z_main() {
     *)
       gum log -t error "more than one argument provided"
       return 1
+      ;;
+  esac
+}
+
+z_main() {
+  local subcommand="${1:-}"
+
+  case "$subcommand" in
+    attach)
+      shift
+      z_attach "$@"
+      ;;
+    *)
+      z_usage
       ;;
   esac
 }
