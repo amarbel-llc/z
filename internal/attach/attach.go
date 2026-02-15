@@ -129,6 +129,8 @@ func PostZmx(sweatshopPath, format string) error {
 		return nil
 	}
 
+	if action == "Abort" {
+		return Existing(sweatshopPath, format)
 	if tw != nil {
 		tw.PlanAhead(estimateSteps(action))
 	}
@@ -147,6 +149,7 @@ func chooseAction(worktreeName string, hasUncommitted bool) (string, error) {
 			huh.NewOption("Rebase + Merge + Push", "Rebase + Merge + Push"),
 			huh.NewOption("Rebase + Merge", "Rebase + Merge"),
 			huh.NewOption("Rebase", "Rebase"),
+			huh.NewOption("Abort (reattach)", "Abort"),
 		}
 	} else {
 		header = fmt.Sprintf("Post-zmx actions for %s:", worktreeName)
@@ -156,6 +159,7 @@ func chooseAction(worktreeName string, hasUncommitted bool) (string, error) {
 			huh.NewOption("Rebase + Merge + Remove worktree", "Rebase + Merge + Remove worktree"),
 			huh.NewOption("Rebase + Merge", "Rebase + Merge"),
 			huh.NewOption("Rebase", "Rebase"),
+			huh.NewOption("Abort (reattach)", "Abort"),
 		}
 	}
 
