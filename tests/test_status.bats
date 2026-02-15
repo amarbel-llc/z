@@ -75,3 +75,13 @@ function status_skips_non_git_directories { # @test
   [[ "$status" -eq 0 ]]
   [[ "$output" != *"not-a-repo"* ]]
 }
+
+function status_tap_format_outputs_tap { # @test
+  create_mock_repo "$HOME/eng/repos/repo-a"
+
+  run sweatshop status --format tap
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"TAP version 14"* ]]
+  [[ "$output" == *"ok"*"eng/repos/repo-a"* ]]
+  [[ "$output" == *"1.."* ]]
+}

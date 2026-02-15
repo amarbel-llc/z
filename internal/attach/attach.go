@@ -11,6 +11,7 @@ import (
 
 	"github.com/amarbel-llc/sweatshop/internal/flake"
 	"github.com/amarbel-llc/sweatshop/internal/git"
+	"github.com/amarbel-llc/sweatshop/internal/tap"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
 
@@ -23,17 +24,17 @@ func Remote(host, path string) error {
 	return cmd.Run()
 }
 
-func Existing(sweatshopPath string) error {
+func Existing(sweatshopPath, format string) error {
 	cmd := exec.Command("zmx", "attach", sweatshopPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	_ = cmd.Run() // zmx returns non-zero on detach
 
-	return PostZmx(sweatshopPath)
+	return PostZmx(sweatshopPath, format)
 }
 
-func ToPath(sweatshopPath string) error {
+func ToPath(sweatshopPath, format string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return err
@@ -67,10 +68,10 @@ func ToPath(sweatshopPath string) error {
 	cmd.Stdin = os.Stdin
 	_ = cmd.Run()
 
-	return PostZmx(sweatshopPath)
+	return PostZmx(sweatshopPath, format)
 }
 
-func PostZmx(sweatshopPath string) error {
+func PostZmx(sweatshopPath, format string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return nil // not a worktree path, nothing to do
@@ -93,26 +94,45 @@ func PostZmx(sweatshopPath string) error {
 	commitsAhead := git.CommitsAhead(worktreePath, defaultBranch, comp.Worktree)
 	worktreeStatus := git.StatusPorcelain(worktreePath)
 
+	var tw *tap.Writer
+	if format == "tap" {
+		tw = tap.NewWriter(os.Stdout)
+	}
+
 	if commitsAhead == 0 && worktreeStatus == "" {
-		log.Info("no changes in worktree", "worktree", comp.Worktree)
+		if tw != nil {
+			tw.Skip("post-zmx "+comp.Worktree, "no changes")
+			tw.Plan()
+		} else {
+			log.Info("no changes in worktree", "worktree", comp.Worktree)
+		}
 		return nil
 	}
 
 	hasUncommitted := worktreeStatus != ""
 	if hasUncommitted {
-		log.Warn("worktree has uncommitted changes", "worktree", comp.Worktree)
-		cmd := exec.Command("git", "-C", worktreePath, "status", "--short")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Run()
+		if tw == nil {
+			log.Warn("worktree has uncommitted changes", "worktree", comp.Worktree)
+			cmd := exec.Command("git", "-C", worktreePath, "status", "--short")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		}
 	}
 
 	action, err := chooseAction(comp.Worktree, hasUncommitted)
 	if err != nil || action == "" {
+		if tw != nil {
+			tw.Plan()
+		}
 		return nil
 	}
 
-	return executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch, comp.Worktree)
+	err = executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch, comp.Worktree, tw)
+	if tw != nil {
+		tw.Plan()
+	}
+	return err
 }
 
 func chooseAction(worktreeName string, hasUncommitted bool) (string, error) {
@@ -151,24 +171,54 @@ func chooseAction(worktreeName string, hasUncommitted bool) (string, error) {
 	return action, nil
 }
 
-func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch, worktreeName string) error {
+func runGit(tw *tap.Writer, repoPath string, args ...string) error {
+	if tw != nil {
+		_, err := git.Run(repoPath, args...)
+		return err
+	}
+	return git.RunPassthrough(repoPath, args...)
+}
+
+func tapStep(tw *tap.Writer, desc string, err error) error {
+	if tw == nil {
+		return err
+	}
+	if err != nil {
+		tw.NotOk(desc, map[string]string{"error": err.Error()})
+	} else {
+		tw.Ok(desc)
+	}
+	return err
+}
+
+func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch, worktreeName string, tw *tap.Writer) error {
 	home, _ := os.UserHomeDir()
 
 	// Pull
 	if len(action) >= 4 && action[:4] == "Pull" {
-		if err := git.RunPassthrough(repoPath, "pull"); err != nil {
-			log.Error("pull failed")
+		err := runGit(tw, repoPath, "pull")
+		if tapStep(tw, "pull "+defaultBranch, err) != nil {
+			if tw == nil {
+				log.Error("pull failed")
+			}
 			return err
 		}
-		log.Info("pulled from origin", "branch", defaultBranch)
+		if tw == nil {
+			log.Info("pulled from origin", "branch", defaultBranch)
+		}
 	}
 
 	// Rebase
-	if err := git.RunPassthrough(worktreePath, "rebase", defaultBranch); err != nil {
-		log.Error("rebase failed")
+	err := runGit(tw, worktreePath, "rebase", defaultBranch)
+	if tapStep(tw, "rebase "+worktreeName+" onto "+defaultBranch, err) != nil {
+		if tw == nil {
+			log.Error("rebase failed")
+		}
 		return err
 	}
-	log.Info("rebased onto default branch", "worktree", worktreeName, "base", defaultBranch)
+	if tw == nil {
+		log.Info("rebased onto default branch", "worktree", worktreeName, "base", defaultBranch)
+	}
 
 	if action == "Rebase" {
 		return nil
@@ -177,27 +227,38 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	// Stash repo changes before merge
 	repoStashed := false
 	if git.HasDirtyTracked(repoPath) {
-		if err := git.RunPassthrough(repoPath, "stash", "push", "-m", "sweatshop: auto-stash before merge of "+worktreeName); err == nil {
+		if err := runGit(tw, repoPath, "stash", "push", "-m", "sweatshop: auto-stash before merge of "+worktreeName); err == nil {
 			repoStashed = true
-			log.Info("stashed changes", "path", repoPath)
+			if tw == nil {
+				log.Info("stashed changes", "path", repoPath)
+			}
 		}
 	}
 
 	// Merge
-	if err := git.RunPassthrough(repoPath, "merge", worktreeName, "--ff-only"); err != nil {
-		log.Error("merge failed (not fast-forward)")
-		if repoStashed {
-			git.RunPassthrough(repoPath, "stash", "pop")
-			log.Info("restored stashed changes", "path", repoPath)
+	mergeErr := runGit(tw, repoPath, "merge", worktreeName, "--ff-only")
+	if tapStep(tw, "merge "+worktreeName+" into "+defaultBranch, mergeErr) != nil {
+		if tw == nil {
+			log.Error("merge failed (not fast-forward)")
 		}
-		return err
+		if repoStashed {
+			runGit(tw, repoPath, "stash", "pop")
+			if tw == nil {
+				log.Info("restored stashed changes", "path", repoPath)
+			}
+		}
+		return mergeErr
 	}
-	log.Info("merged into default branch", "worktree", worktreeName, "base", defaultBranch)
+	if tw == nil {
+		log.Info("merged into default branch", "worktree", worktreeName, "base", defaultBranch)
+	}
 
 	// Restore stash
 	if repoStashed {
-		git.RunPassthrough(repoPath, "stash", "pop")
-		log.Info("restored stashed changes", "path", repoPath)
+		runGit(tw, repoPath, "stash", "pop")
+		if tw == nil {
+			log.Info("restored stashed changes", "path", repoPath)
+		}
 	}
 
 	if action == "Rebase + Merge" {
@@ -207,26 +268,41 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	// Remove worktree
 	if containsRemoveWorktree(action) {
 		fullPath := filepath.Join(home, sweatshopPath)
-		if err := git.RunPassthrough(repoPath, "worktree", "remove", fullPath); err != nil {
-			log.Error("failed to remove worktree")
-			return err
+		wtErr := runGit(tw, repoPath, "worktree", "remove", fullPath)
+		if tapStep(tw, "remove worktree "+worktreeName, wtErr) != nil {
+			if tw == nil {
+				log.Error("failed to remove worktree")
+			}
+			return wtErr
 		}
-		log.Info("removed worktree", "worktree", worktreeName)
+		if tw == nil {
+			log.Info("removed worktree", "worktree", worktreeName)
+		}
 
-		if err := git.RunPassthrough(repoPath, "branch", "-D", worktreeName); err != nil {
-			log.Error("failed to delete branch", "branch", worktreeName)
-			return err
+		brErr := runGit(tw, repoPath, "branch", "-D", worktreeName)
+		if tapStep(tw, "delete branch "+worktreeName, brErr) != nil {
+			if tw == nil {
+				log.Error("failed to delete branch", "branch", worktreeName)
+			}
+			return brErr
 		}
-		log.Info("deleted branch", "branch", worktreeName)
+		if tw == nil {
+			log.Info("deleted branch", "branch", worktreeName)
+		}
 	}
 
 	// Push
 	if len(action) >= 4 && action[len(action)-4:] == "Push" {
-		if err := git.RunPassthrough(repoPath, "push", "origin", defaultBranch); err != nil {
-			log.Error("push failed")
-			return err
+		pushErr := runGit(tw, repoPath, "push", "origin", defaultBranch)
+		if tapStep(tw, "push "+defaultBranch, pushErr) != nil {
+			if tw == nil {
+				log.Error("push failed")
+			}
+			return pushErr
 		}
-		log.Info("pushed to origin", "branch", defaultBranch)
+		if tw == nil {
+			log.Info("pushed to origin", "branch", defaultBranch)
+		}
 	}
 
 	return nil

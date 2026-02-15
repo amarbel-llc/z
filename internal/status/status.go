@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 
 	"github.com/amarbel-llc/sweatshop/internal/git"
+	"github.com/amarbel-llc/sweatshop/internal/tap"
 )
 
 type BranchStatus struct {
@@ -238,4 +240,13 @@ func Render(rows []BranchStatus) string {
 	}
 
 	return strings.Join(sections, "\n\n")
+}
+
+func RenderTap(rows []BranchStatus, w io.Writer) {
+	tw := tap.NewWriter(w)
+	for _, r := range rows {
+		desc := r.Repo + " " + r.Branch
+		tw.Ok(desc)
+	}
+	tw.Plan()
 }

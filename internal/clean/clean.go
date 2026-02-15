@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 
 	"github.com/amarbel-llc/sweatshop/internal/git"
+	"github.com/amarbel-llc/sweatshop/internal/tap"
 )
 
 type FileChange struct {
@@ -170,7 +171,14 @@ func handleDirtyWorktree(wt worktreeInfo) (removed bool, err error) {
 	return true, nil
 }
 
-func Run(home string, interactive bool) error {
+func Run(home string, interactive bool, format string) error {
+	if format == "tap" {
+		return runTap(home, interactive)
+	}
+	return runTable(home, interactive)
+}
+
+func runTable(home string, interactive bool) error {
 	worktrees := scanWorktrees(home)
 	if len(worktrees) == 0 {
 		log.Info("no worktrees found")
@@ -219,5 +227,55 @@ func Run(home string, interactive bool) error {
 	}
 
 	log.Info("clean complete", "removed", removed, "skipped", skipped)
+	return nil
+}
+
+func runTap(home string, interactive bool) error {
+	tw := tap.NewWriter(os.Stdout)
+
+	worktrees := scanWorktrees(home)
+	if len(worktrees) == 0 {
+		tw.Skip("clean", "no worktrees found")
+		tw.Plan()
+		return nil
+	}
+
+	for _, wt := range worktrees {
+		if !wt.merged {
+			continue
+		}
+
+		label := wt.engArea + "/worktrees/" + wt.repo + "/" + wt.branch
+
+		if !wt.dirty {
+			if err := removeWorktree(wt); err != nil {
+				tw.NotOk("remove "+label, map[string]string{
+					"error": err.Error(),
+				})
+				continue
+			}
+			tw.Ok("remove " + label)
+			continue
+		}
+
+		if interactive {
+			wasRemoved, err := handleDirtyWorktree(wt)
+			if err != nil {
+				tw.NotOk("remove "+label, map[string]string{
+					"error": err.Error(),
+				})
+				continue
+			}
+			if wasRemoved {
+				tw.Ok("remove " + label)
+			} else {
+				tw.Skip("remove "+label, "kept after interactive review")
+			}
+		} else {
+			tw.Skip("remove "+label, "dirty worktree")
+		}
+	}
+
+	tw.Plan()
 	return nil
 }

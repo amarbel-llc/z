@@ -15,6 +15,8 @@ import (
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
 
+var outputFormat string
+
 var rootCmd = &cobra.Command{
 	Use:   "sweatshop",
 	Short: "Shell-agnostic git worktree session manager",
@@ -32,6 +34,11 @@ var attachCmd = &cobra.Command{
 			return err
 		}
 
+		format := outputFormat
+		if format == "" {
+			format = "tap"
+		}
+
 		if len(args) == 0 {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -40,9 +47,9 @@ var attachCmd = &cobra.Command{
 			sweatshopPath := cwd[len(home)+1:]
 
 			if info, err := os.Stat(cwd); err == nil && info.IsDir() {
-				return attach.Existing(sweatshopPath)
+				return attach.Existing(sweatshopPath, format)
 			}
-			return attach.ToPath(sweatshopPath)
+			return attach.ToPath(sweatshopPath, format)
 		}
 
 		target := worktree.ParseTarget(args[0])
@@ -53,10 +60,10 @@ var attachCmd = &cobra.Command{
 
 		fullPath := home + "/" + target.Path
 		if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
-			return attach.Existing(target.Path)
+			return attach.Existing(target.Path, format)
 		}
 
-		return attach.ToPath(target.Path)
+		return attach.ToPath(target.Path, format)
 	},
 }
 
@@ -70,13 +77,22 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
+		format := outputFormat
+		if format == "" {
+			format = "table"
+		}
+
 		rows := status.CollectStatus(home)
 		if len(rows) == 0 {
 			log.Info("no repos found")
 			return nil
 		}
 
-		fmt.Println(status.Render(rows))
+		if format == "tap" {
+			status.RenderTap(rows, os.Stdout)
+		} else {
+			fmt.Println(status.Render(rows))
+		}
 		return nil
 	},
 }
@@ -102,7 +118,12 @@ var cleanCmd = &cobra.Command{
 			return err
 		}
 
-		return clean.Run(home, cleanInteractive)
+		format := outputFormat
+		if format == "" {
+			format = "tap"
+		}
+
+		return clean.Run(home, cleanInteractive, format)
 	},
 }
 
@@ -124,6 +145,7 @@ var completionsCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&outputFormat, "format", "", "output format: tap or table")
 	cleanCmd.Flags().BoolVarP(&cleanInteractive, "interactive", "i", false, "interactively discard changes in dirty merged worktrees")
 	rootCmd.AddCommand(attachCmd)
 	rootCmd.AddCommand(statusCmd)

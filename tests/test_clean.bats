@@ -45,8 +45,8 @@ function clean_removes_merged_clean_worktrees { # @test
 
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"removed"* ]]
-  [[ "$output" == *"done-branch"* ]]
+  [[ "$output" == *"TAP version 14"* ]]
+  [[ "$output" == *"ok"*"remove eng/worktrees/myrepo/done-branch"* ]]
   [[ ! -d "$HOME/eng/worktrees/myrepo/done-branch" ]]
 }
 
@@ -56,7 +56,7 @@ function clean_skips_unmerged_worktrees { # @test
 
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" != *"removed"*"wip-branch"* ]]
+  [[ "$output" != *"remove"*"wip-branch"* ]]
   [[ -d "$HOME/eng/worktrees/myrepo/wip-branch" ]]
 }
 
@@ -67,26 +67,24 @@ function clean_skips_dirty_worktrees_without_interactive { # @test
 
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"skipped"* ]]
-  [[ "$output" == *"dirty"* ]]
+  [[ "$output" == *"# SKIP dirty worktree"* ]]
   [[ -d "$HOME/eng/worktrees/myrepo/dirty-branch" ]]
 }
 
-function clean_reports_summary { # @test
+function clean_reports_plan_line { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
   create_merged_worktree "$HOME/eng/repos/myrepo" "merged-a" "$HOME/eng/worktrees/myrepo/merged-a"
   create_merged_worktree "$HOME/eng/repos/myrepo" "merged-b" "$HOME/eng/worktrees/myrepo/merged-b"
 
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"removed=2"* ]]
-  [[ "$output" == *"skipped=0"* ]]
+  [[ "$output" == *"1..2"* ]]
 }
 
 function clean_shows_message_when_no_worktrees { # @test
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"no worktrees found"* ]]
+  [[ "$output" == *"# SKIP no worktrees found"* ]]
 }
 
 function clean_handles_mixed_merged_and_unmerged { # @test
@@ -96,8 +94,7 @@ function clean_handles_mixed_merged_and_unmerged { # @test
 
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"removed=1"* ]]
-  [[ "$output" == *"skipped=0"* ]]
+  [[ "$output" == *"1..1"* ]]
   [[ ! -d "$HOME/eng/worktrees/myrepo/merged" ]]
   [[ -d "$HOME/eng/worktrees/myrepo/unmerged" ]]
 }
@@ -110,7 +107,18 @@ function clean_works_across_eng_areas { # @test
 
   run sweatshop clean
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"removed=2"* ]]
+  [[ "$output" == *"1..2"* ]]
   [[ ! -d "$HOME/eng/worktrees/repo-a/done-a" ]]
   [[ ! -d "$HOME/eng2/worktrees/repo-b/done-b" ]]
+}
+
+function clean_table_format_uses_log_output { # @test
+  create_repo_with_commit "$HOME/eng/repos/myrepo"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "done-branch" "$HOME/eng/worktrees/myrepo/done-branch"
+
+  run sweatshop clean --format table
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"removed"* ]]
+  [[ "$output" == *"done-branch"* ]]
+  [[ "$output" != *"TAP version"* ]]
 }
