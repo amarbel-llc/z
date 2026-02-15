@@ -25,8 +25,13 @@ func Remote(host, path string) error {
 	return cmd.Run()
 }
 
-func Existing(sweatshopPath, format string) error {
-	cmd := exec.Command("zmx", "attach", sweatshopPath)
+func Existing(sweatshopPath, format, prompt string) error {
+	zmxArgs := []string{"attach", sweatshopPath}
+	if prompt != "" {
+		zmxArgs = append(zmxArgs, "claude", prompt)
+	}
+
+	cmd := exec.Command("zmx", zmxArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -35,7 +40,7 @@ func Existing(sweatshopPath, format string) error {
 	return PostZmx(sweatshopPath, format)
 }
 
-func ToPath(sweatshopPath, format string) error {
+func ToPath(sweatshopPath, format, prompt string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return err
@@ -58,7 +63,14 @@ func ToPath(sweatshopPath, format string) error {
 	}
 
 	zmxArgs := []string{"attach", sweatshopPath}
-	if flake.HasDevShell(worktreePath) {
+	if prompt != "" {
+		if flake.HasDevShell(worktreePath) {
+			log.Info("flake.nix detected, starting claude in nix develop")
+			zmxArgs = append(zmxArgs, "nix", "develop", "--command", "claude", prompt)
+		} else {
+			zmxArgs = append(zmxArgs, "claude", prompt)
+		}
+	} else if flake.HasDevShell(worktreePath) {
 		log.Info("flake.nix detected, starting session in nix develop")
 		zmxArgs = append(zmxArgs, "nix", "develop", "--command", os.Getenv("SHELL"))
 	}
@@ -130,7 +142,7 @@ func PostZmx(sweatshopPath, format string) error {
 	}
 
 	if action == "Abort" {
-		return Existing(sweatshopPath, format)
+		return Existing(sweatshopPath, format, "")
 	}
 
 	if tw != nil {
@@ -208,7 +220,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 			if tw == nil {
 				log.Error("pull failed, reattaching to session to resolve")
 			}
-			return Existing(sweatshopPath, format)
+			return Existing(sweatshopPath, format, "")
 		}
 		if tw == nil {
 			log.Info("pulled from origin", "branch", defaultBranch)
@@ -221,7 +233,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 		if tw == nil {
 			log.Error("rebase failed, reattaching to session to resolve conflicts")
 		}
-		return Existing(sweatshopPath, format)
+		return Existing(sweatshopPath, format, "")
 	}
 	if tw == nil {
 		log.Info("rebased onto default branch", "worktree", worktreeName, "base", defaultBranch)
@@ -254,7 +266,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 				log.Info("restored stashed changes", "path", repoPath)
 			}
 		}
-		return Existing(sweatshopPath, format)
+		return Existing(sweatshopPath, format, "")
 	}
 	if tw == nil {
 		log.Info("merged into default branch", "worktree", worktreeName, "base", defaultBranch)
