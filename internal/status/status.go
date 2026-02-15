@@ -170,15 +170,6 @@ func (bs BranchStatus) isClean() bool {
 	return bs.Dirty == "clean" && (strings.HasPrefix(bs.Remote, "≡") || bs.Remote == "")
 }
 
-var (
-	styleClean = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	styleDirty = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red
-	styleAhead = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
-	styleEven  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	styleDim   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // dim
-	styleBold  = lipgloss.NewStyle().Bold(true)
-)
-
 func renderTable(data [][]string) string {
 	headers := []string{"Repo", "Branch", "Status", "Remote", "Commit", "Modified"}
 
@@ -188,31 +179,31 @@ func renderTable(data [][]string) string {
 		Headers(headers...).
 		Rows(data...).
 		StyleFunc(func(row, col int) lipgloss.Style {
+			base := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
+
 			if row == table.HeaderRow {
-				return styleBold
+				return base.Bold(true)
 			}
 
 			switch col {
 			case 2: // Status
 				val := data[row][col]
 				if val == "clean" {
-					return styleClean
+					return base.Foreground(lipgloss.Color("2"))
 				}
-				return styleDirty
+				return base.Foreground(lipgloss.Color("1"))
 			case 3: // Remote
 				val := data[row][col]
 				if strings.HasPrefix(val, "≡") {
-					return styleEven
+					return base.Foreground(lipgloss.Color("2"))
 				}
 				if strings.Contains(val, "↑") || strings.Contains(val, "↓") {
-					return styleAhead
+					return base.Foreground(lipgloss.Color("3"))
 				}
-				return styleDim
-			case 4, 5: // dates
-				return lipgloss.NewStyle()
+				return base.Foreground(lipgloss.Color("8"))
 			}
 
-			return lipgloss.NewStyle()
+			return base
 		})
 
 	return t.Render()
