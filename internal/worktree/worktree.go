@@ -57,7 +57,38 @@ func Create(engArea, repoPath, worktreePath string) error {
 	if err := git.RunPassthrough(repoPath, "worktree", "add", worktreePath); err != nil {
 		return fmt.Errorf("git worktree add: %w", err)
 	}
+	if err := applyGitExcludes(worktreePath); err != nil {
+		return fmt.Errorf("applying git excludes: %w", err)
+	}
 	return ApplyRcmOverlay(engArea, worktreePath)
+}
+
+var gitExcludes = []string{
+	".claude/",
+}
+
+func applyGitExcludes(worktreePath string) error {
+	excludePath, err := git.Run(worktreePath, "rev-parse", "--git-path", "info/exclude")
+	if err != nil {
+		return err
+	}
+	if !filepath.IsAbs(excludePath) {
+		excludePath = filepath.Join(worktreePath, excludePath)
+	}
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(excludePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, pattern := range gitExcludes {
+		if _, err := fmt.Fprintln(f, pattern); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ApplyRcmOverlay(engArea, worktreePath string) error {
