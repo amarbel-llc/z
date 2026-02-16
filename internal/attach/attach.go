@@ -14,6 +14,7 @@ import (
 	"github.com/amarbel-llc/sweatshop/internal/flake"
 	"github.com/amarbel-llc/sweatshop/internal/git"
 	"github.com/amarbel-llc/sweatshop/internal/perms"
+	"github.com/amarbel-llc/sweatshop/internal/sweatfile"
 	"github.com/amarbel-llc/sweatshop/internal/tap"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
@@ -33,6 +34,7 @@ func Existing(sweatshopPath, format string, claudeArgs []string) error {
 	home, _ := os.UserHomeDir()
 	worktreePath := worktree.WorktreePath(home, sweatshopPath)
 	perms.SnapshotSettings(worktreePath)
+	sweatfile.SnapshotEnv(worktreePath)
 
 	zmxArgs := []string{"attach", sweatshopPath}
 	if len(claudeArgs) > 0 {
@@ -72,6 +74,7 @@ func ToPath(sweatshopPath, format string, claudeArgs []string) error {
 	}
 
 	perms.SnapshotSettings(worktreePath)
+	sweatfile.SnapshotEnv(worktreePath)
 
 	zmxArgs := []string{"attach", sweatshopPath}
 	if len(claudeArgs) > 0 {
@@ -125,6 +128,54 @@ func PostZmx(sweatshopPath, format string) error {
 		log.Warn("permission review skipped", "error", reviewErr)
 	}
 	perms.CleanupSnapshot(worktreePath)
+
+	// Review env changes
+	added, changed, envErr := sweatfile.DiffEnv(worktreePath)
+	if envErr == nil && (len(added) > 0 || len(changed) > 0) {
+		repoSweatfilePath := filepath.Join(repoPath, "sweatfile")
+		envFilePath := filepath.Join(worktreePath, ".sweatshop-env")
+		var envDecisions []sweatfile.EnvDecision
+
+		allChanges := make(map[string]string)
+		for k, v := range added {
+			allChanges[k] = v
+		}
+		for k, v := range changed {
+			allChanges[k] = v
+		}
+
+		for k, v := range allChanges {
+			var action string
+			label := fmt.Sprintf("New env var: %s=%s", k, v)
+			if _, ok := changed[k]; ok {
+				label = fmt.Sprintf("Changed env var: %s=%s", k, v)
+			}
+
+			selectPrompt := huh.NewSelect[string]().
+				Title(label).
+				Options(
+					huh.NewOption(fmt.Sprintf("Promote to %s sweatfile", comp.Repo), sweatfile.EnvPromoteRepo),
+					huh.NewOption("Keep for this worktree only", sweatfile.EnvKeep),
+					huh.NewOption("Discard", sweatfile.EnvDiscard),
+				).
+				Value(&action)
+
+			if err := selectPrompt.Run(); err != nil {
+				break
+			}
+
+			envDecisions = append(envDecisions, sweatfile.EnvDecision{
+				Key: k, Value: v, Action: action,
+			})
+		}
+
+		if len(envDecisions) > 0 {
+			if routeErr := sweatfile.RouteEnvDecisions(repoSweatfilePath, envFilePath, envDecisions); routeErr != nil {
+				log.Warn("env review routing failed", "error", routeErr)
+			}
+		}
+	}
+	sweatfile.CleanupEnvSnapshot(worktreePath)
 
 	var tw *tap.Writer
 	if format == "tap" {

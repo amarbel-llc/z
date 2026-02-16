@@ -3,6 +3,7 @@ package sweatfile
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,58 @@ func TestCleanupEnvSnapshot(t *testing.T) {
 	CleanupEnvSnapshot(dir)
 	if _, err := os.Stat(snap); err == nil {
 		t.Error("expected snapshot removed")
+	}
+}
+
+func TestRouteEnvDecisionsPromote(t *testing.T) {
+	dir := t.TempDir()
+	sweatfilePath := filepath.Join(dir, "sweatfile")
+	envPath := filepath.Join(dir, ".sweatshop-env")
+	os.WriteFile(envPath, []byte("EDITOR=nvim\nPAGER=less\n"), 0o644)
+
+	decisions := []EnvDecision{
+		{Key: "EDITOR", Value: "nvim", Action: EnvPromoteRepo},
+		{Key: "PAGER", Value: "less", Action: EnvKeep},
+	}
+
+	err := RouteEnvDecisions(sweatfilePath, envPath, decisions)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Promoted key should be in repo sweatfile
+	sf, _ := Load(sweatfilePath)
+	if sf.Env["EDITOR"] != "nvim" {
+		t.Errorf("expected EDITOR=nvim in sweatfile, got %v", sf.Env)
+	}
+
+	// Promoted key removed from env file, kept key stays
+	data, _ := os.ReadFile(envPath)
+	if strings.Contains(string(data), "EDITOR") {
+		t.Errorf("expected EDITOR removed from env file, got %q", string(data))
+	}
+	if !strings.Contains(string(data), "PAGER=less") {
+		t.Errorf("expected PAGER=less kept in env file, got %q", string(data))
+	}
+}
+
+func TestRouteEnvDecisionsDiscard(t *testing.T) {
+	dir := t.TempDir()
+	sweatfilePath := filepath.Join(dir, "sweatfile")
+	envPath := filepath.Join(dir, ".sweatshop-env")
+	os.WriteFile(envPath, []byte("FOO=bar\n"), 0o644)
+
+	decisions := []EnvDecision{
+		{Key: "FOO", Value: "bar", Action: EnvDiscard},
+	}
+
+	err := RouteEnvDecisions(sweatfilePath, envPath, decisions)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Discarded -- env file should be removed (was the only key)
+	if _, err := os.Stat(envPath); err == nil {
+		t.Error("expected env file removed after discarding only key")
 	}
 }
