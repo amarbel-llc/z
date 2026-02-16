@@ -123,12 +123,7 @@ var cleanCmd = &cobra.Command{
 			return err
 		}
 
-		format := outputFormat
-		if format == "" {
-			format = "tap"
-		}
-
-		return clean.Run(home, cleanInteractive, format)
+		return clean.Run(home, cleanInteractive)
 	},
 }
 

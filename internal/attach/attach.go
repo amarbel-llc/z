@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 
 	"github.com/amarbel-llc/sweatshop/internal/flake"
@@ -15,6 +16,8 @@ import (
 	"github.com/amarbel-llc/sweatshop/internal/tap"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
+
+var styleCode = lipgloss.NewStyle().Foreground(lipgloss.Color("#E88388")).Background(lipgloss.Color("#1D1F21")).Padding(0, 1)
 
 func Remote(host, path string) error {
 	log.Info("connecting to remote session", "host", host, "path", path)
@@ -118,7 +121,7 @@ func PostZmx(sweatshopPath, format string) error {
 	if commitsAhead == 0 && worktreeStatus == "" {
 		if tw != nil {
 			tw.PlanAhead(1)
-			tw.Skip("post-zmx "+comp.Worktree, "no changes")
+			tw.Skip("post-zmx "+styleCode.Render(comp.Worktree), "no changes")
 		} else {
 			log.Info("no changes in worktree", "worktree", comp.Worktree)
 		}
@@ -219,7 +222,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	// Pull
 	if len(action) >= 4 && action[:4] == "Pull" {
 		err := runGit(tw, repoPath, "pull")
-		if tapStep(tw, "pull "+defaultBranch, err) != nil {
+		if tapStep(tw, "pull "+styleCode.Render(defaultBranch), err) != nil {
 			if tw == nil {
 				log.Error("pull failed, reattaching to session to resolve")
 			}
@@ -232,7 +235,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 
 	// Rebase
 	err := runGit(tw, worktreePath, "rebase", defaultBranch)
-	if tapStep(tw, "rebase "+worktreeName+" onto "+defaultBranch, err) != nil {
+	if tapStep(tw, "rebase "+styleCode.Render(worktreeName)+" onto "+styleCode.Render(defaultBranch), err) != nil {
 		if tw == nil {
 			log.Error("rebase failed, reattaching to session to resolve conflicts")
 		}
@@ -259,7 +262,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 
 	// Merge
 	mergeErr := runGit(tw, repoPath, "merge", worktreeName, "--ff-only")
-	if tapStep(tw, "merge "+worktreeName+" into "+defaultBranch, mergeErr) != nil {
+	if tapStep(tw, "merge "+styleCode.Render(worktreeName)+" into "+styleCode.Render(defaultBranch), mergeErr) != nil {
 		if tw == nil {
 			log.Error("merge failed (not fast-forward), reattaching to session to resolve")
 		}
@@ -291,7 +294,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	if containsRemoveWorktree(action) {
 		fullPath := filepath.Join(home, sweatshopPath)
 		wtErr := runGit(tw, repoPath, "worktree", "remove", fullPath)
-		if tapStep(tw, "remove worktree "+worktreeName, wtErr) != nil {
+		if tapStep(tw, "remove worktree "+styleCode.Render(worktreeName), wtErr) != nil {
 			if tw == nil {
 				log.Error("failed to remove worktree")
 			}
@@ -302,7 +305,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 		}
 
 		brErr := runGit(tw, repoPath, "branch", "-D", worktreeName)
-		if tapStep(tw, "delete branch "+worktreeName, brErr) != nil {
+		if tapStep(tw, "delete branch "+styleCode.Render(worktreeName), brErr) != nil {
 			if tw == nil {
 				log.Error("failed to delete branch", "branch", worktreeName)
 			}
@@ -316,7 +319,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	// Push
 	if len(action) >= 4 && action[len(action)-4:] == "Push" {
 		pushErr := runGit(tw, repoPath, "push", "origin", defaultBranch)
-		if tapStep(tw, "push "+defaultBranch, pushErr) != nil {
+		if tapStep(tw, "push "+styleCode.Render(defaultBranch), pushErr) != nil {
 			if tw == nil {
 				log.Error("push failed")
 			}

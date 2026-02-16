@@ -174,66 +174,7 @@ func handleDirtyWorktree(wt worktreeInfo) (removed bool, err error) {
 	return true, nil
 }
 
-func Run(home string, interactive bool, format string) error {
-	if format == "tap" {
-		return runTap(home, interactive)
-	}
-	return runTable(home, interactive)
-}
-
-func runTable(home string, interactive bool) error {
-	worktrees := scanWorktrees(home)
-	if len(worktrees) == 0 {
-		log.Info("no worktrees found")
-		return nil
-	}
-
-	var removed, skipped int
-
-	for _, wt := range worktrees {
-		label := wt.engArea + "/worktrees/" + wt.repo + "/" + wt.branch
-
-		if !wt.merged {
-			continue
-		}
-
-		if !wt.dirty {
-			if err := removeWorktree(wt); err != nil {
-				log.Error("failed to remove worktree", "worktree", label, "err", err)
-				skipped++
-				continue
-			}
-			log.Info("removed", "worktree", label)
-			removed++
-			continue
-		}
-
-		if interactive {
-			log.Info("dirty worktree", "worktree", label)
-			wasRemoved, err := handleDirtyWorktree(wt)
-			if err != nil {
-				log.Error("error handling dirty worktree", "worktree", label, "err", err)
-				skipped++
-				continue
-			}
-			if wasRemoved {
-				log.Info("removed", "worktree", label)
-				removed++
-			} else {
-				log.Info("kept", "worktree", label)
-				skipped++
-			}
-		} else {
-			log.Info("skipped (dirty)", "worktree", label)
-			skipped++
-		}
-	}
-
-	log.Info("clean complete", "removed", removed, "skipped", skipped)
-	return nil
-}
-
-func runTap(home string, interactive bool) error {
+func Run(home string, interactive bool) error {
 	tw := tap.NewWriter(os.Stdout)
 
 	worktrees := scanWorktrees(home)
