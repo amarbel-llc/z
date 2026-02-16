@@ -11,6 +11,7 @@ import (
 	"github.com/amarbel-llc/sweatshop/internal/clean"
 	"github.com/amarbel-llc/sweatshop/internal/completions"
 	"github.com/amarbel-llc/sweatshop/internal/merge"
+	"github.com/amarbel-llc/sweatshop/internal/perms"
 	"github.com/amarbel-llc/sweatshop/internal/status"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
@@ -152,6 +153,7 @@ func init() {
 	rootCmd.AddCommand(mergeCmd)
 	rootCmd.AddCommand(cleanCmd)
 	rootCmd.AddCommand(completionsCmd)
+	rootCmd.AddCommand(perms.NewPermsCmd())
 }
 
 func main() {
