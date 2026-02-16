@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
@@ -78,4 +79,16 @@ func Merge(base, repo Sweatfile) Sweatfile {
 	}
 
 	return merged
+}
+
+func LoadMerged(engAreaDir, repoDir string) (Sweatfile, error) {
+	base, err := Load(filepath.Join(engAreaDir, "sweatfile"))
+	if err != nil {
+		return Sweatfile{}, err
+	}
+	repo, err := Load(filepath.Join(repoDir, "sweatfile"))
+	if err != nil {
+		return Sweatfile{}, err
+	}
+	return Merge(base, repo), nil
 }

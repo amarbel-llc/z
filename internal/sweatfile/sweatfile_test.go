@@ -162,3 +162,41 @@ func TestMergeBaseOnly(t *testing.T) {
 		t.Errorf("expected inherited git_excludes, got %v", merged.GitExcludes)
 	}
 }
+
+func TestLoadMerged(t *testing.T) {
+	dir := t.TempDir()
+	engDir := filepath.Join(dir, "eng")
+	repoDir := filepath.Join(dir, "eng", "repos", "myrepo")
+	os.MkdirAll(repoDir, 0o755)
+
+	os.WriteFile(filepath.Join(engDir, "sweatfile"), []byte(`
+git_excludes = [".claude/"]
+setup = ["direnv allow"]
+`), 0o644)
+
+	os.WriteFile(filepath.Join(repoDir, "sweatfile"), []byte(`
+setup = ["go mod download"]
+`), 0o644)
+
+	sf, err := LoadMerged(engDir, repoDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sf.GitExcludes) != 1 || sf.GitExcludes[0] != ".claude/" {
+		t.Errorf("git_excludes: got %v", sf.GitExcludes)
+	}
+	if len(sf.Setup) != 2 || sf.Setup[0] != "direnv allow" || sf.Setup[1] != "go mod download" {
+		t.Errorf("setup: got %v", sf.Setup)
+	}
+}
+
+func TestLoadMergedNoFiles(t *testing.T) {
+	dir := t.TempDir()
+	sf, err := LoadMerged(filepath.Join(dir, "eng"), filepath.Join(dir, "repo"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sf.GitExcludes != nil || sf.Setup != nil {
+		t.Errorf("expected zero-value sweatfile, got %+v", sf)
+	}
+}
