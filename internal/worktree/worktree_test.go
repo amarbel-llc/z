@@ -1,8 +1,6 @@
 package worktree
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -69,70 +67,3 @@ func TestParsePathInvalid(t *testing.T) {
 	}
 }
 
-func TestApplyRcmOverlayCopiesAsDotfiles(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	rcmDir := filepath.Join(tmpDir, "eng", "rcm-worktrees", "config", "git")
-	os.MkdirAll(rcmDir, 0o755)
-	os.WriteFile(filepath.Join(rcmDir, "ignore"), []byte("some-config"), 0o644)
-
-	worktreeDir := filepath.Join(tmpDir, "eng", "worktrees", "myrepo", "feature-x")
-	os.MkdirAll(worktreeDir, 0o755)
-
-	// Override HOME for the test
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
-
-	err := ApplyRcmOverlay("eng", worktreeDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	dest := filepath.Join(worktreeDir, ".config", "git", "ignore")
-	data, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("expected dotfile to exist: %v", err)
-	}
-	if string(data) != "some-config" {
-		t.Errorf("expected some-config, got %q", string(data))
-	}
-}
-
-func TestApplyRcmOverlayDoesNotOverwrite(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	rcmDir := filepath.Join(tmpDir, "eng", "rcm-worktrees")
-	os.MkdirAll(rcmDir, 0o755)
-	os.WriteFile(filepath.Join(rcmDir, "gitignore"), []byte("overlay-content"), 0o644)
-
-	worktreeDir := filepath.Join(tmpDir, "eng", "worktrees", "myrepo", "feature-x")
-	os.MkdirAll(worktreeDir, 0o755)
-	os.WriteFile(filepath.Join(worktreeDir, ".gitignore"), []byte("existing-content"), 0o644)
-
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
-
-	ApplyRcmOverlay("eng", worktreeDir)
-
-	data, _ := os.ReadFile(filepath.Join(worktreeDir, ".gitignore"))
-	if string(data) != "existing-content" {
-		t.Errorf("expected existing-content, got %q", string(data))
-	}
-}
-
-func TestApplyRcmOverlaySkipsMissing(t *testing.T) {
-	tmpDir := t.TempDir()
-	worktreeDir := filepath.Join(tmpDir, "eng", "worktrees", "myrepo", "feature-x")
-	os.MkdirAll(worktreeDir, 0o755)
-
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
-
-	err := ApplyRcmOverlay("eng", worktreeDir)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-}

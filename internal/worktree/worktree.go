@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/amarbel-llc/sweatshop/internal/git"
+	"github.com/amarbel-llc/sweatshop/internal/sweatfile"
 )
 
 type Target struct {
@@ -57,63 +58,14 @@ func Create(engArea, repoPath, worktreePath string) error {
 	if err := git.RunPassthrough(repoPath, "worktree", "add", worktreePath); err != nil {
 		return fmt.Errorf("git worktree add: %w", err)
 	}
-	if err := applyGitExcludes(worktreePath); err != nil {
-		return fmt.Errorf("applying git excludes: %w", err)
-	}
-	return ApplyRcmOverlay(engArea, worktreePath)
-}
-
-var gitExcludes = []string{
-	".claude/",
-}
-
-func applyGitExcludes(worktreePath string) error {
-	excludePath, err := git.Run(worktreePath, "rev-parse", "--git-path", "info/exclude")
-	if err != nil {
-		return err
-	}
-	if !filepath.IsAbs(excludePath) {
-		excludePath = filepath.Join(worktreePath, excludePath)
-	}
-	if err := os.MkdirAll(filepath.Dir(excludePath), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(excludePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	for _, pattern := range gitExcludes {
-		if _, err := fmt.Fprintln(f, pattern); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func ApplyRcmOverlay(engArea, worktreePath string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting home directory: %w", err)
 	}
-	rcmDir := filepath.Join(home, engArea, "rcm-worktrees")
-	info, err := os.Stat(rcmDir)
-	if err != nil || !info.IsDir() {
-		return nil
+	engAreaDir := filepath.Join(home, engArea)
+	sf, err := sweatfile.LoadMerged(engAreaDir, repoPath)
+	if err != nil {
+		return fmt.Errorf("loading sweatfile: %w", err)
 	}
-
-	return filepath.Walk(rcmDir, func(src string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(rcmDir, src)
-		dest := filepath.Join(worktreePath, "."+rel)
-		if _, err := os.Stat(dest); err == nil {
-			return nil // don't overwrite existing
-		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-		return os.Symlink(src, dest)
-	})
+	return sweatfile.Apply(worktreePath, sf)
 }
