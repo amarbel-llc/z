@@ -245,7 +245,7 @@ func Render(rows []BranchStatus) string {
 func RenderTap(rows []BranchStatus, w io.Writer) {
 	tw := tap.NewWriter(w)
 	for _, r := range rows {
-		desc := r.Repo + " " + r.Branch
+		desc := r.Repo + " `" + r.Branch + "`"
 		tw.Ok(desc)
 	}
 	tw.Plan()

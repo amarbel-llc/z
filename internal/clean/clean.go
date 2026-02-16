@@ -245,7 +245,7 @@ func runTap(home string, interactive bool) error {
 			continue
 		}
 
-		label := wt.engArea + "/worktrees/" + wt.repo + "/" + wt.branch
+		label := wt.engArea + "/worktrees/" + wt.repo + "/`" + wt.branch + "`"
 
 		if !wt.dirty {
 			if err := removeWorktree(wt); err != nil {
