@@ -13,11 +13,6 @@ exit 0
 MOCKEOF
   chmod +x "$MOCK_BIN/zmx"
 
-  # Git needs user config in the isolated HOME
-  git config --global user.name "Test User"
-  git config --global user.email "test@example.com"
-  git config --global init.defaultBranch main
-
   # Create a real git repo as the "main repo"
   mkdir -p "$HOME/eng/repos/testrepo"
   git init -q "$HOME/eng/repos/testrepo"
