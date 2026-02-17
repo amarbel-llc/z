@@ -174,13 +174,20 @@ func handleDirtyWorktree(wt worktreeInfo) (removed bool, err error) {
 	return true, nil
 }
 
-func Run(home string, interactive bool) error {
-	tw := tap.NewWriter(os.Stdout)
+func Run(home string, interactive bool, format string) error {
+	var tw *tap.Writer
+	if format == "tap" {
+		tw = tap.NewWriter(os.Stdout)
+	}
 
 	worktrees := scanWorktrees(home)
 	if len(worktrees) == 0 {
-		tw.Skip("clean", "no worktrees found")
-		tw.Plan()
+		if tw != nil {
+			tw.Skip("clean", "no worktrees found")
+			tw.Plan()
+		} else {
+			log.Info("no worktrees found")
+		}
 		return nil
 	}
 
@@ -193,33 +200,59 @@ func Run(home string, interactive bool) error {
 
 		if !wt.dirty {
 			if err := removeWorktree(wt); err != nil {
-				tw.NotOk("remove "+label, map[string]string{
-					"error": err.Error(),
-				})
+				if tw != nil {
+					tw.NotOk("remove "+label, map[string]string{
+						"error": err.Error(),
+					})
+				} else {
+					log.Error("failed to remove worktree", "branch", wt.branch, "error", err)
+				}
 				continue
 			}
-			tw.Ok("remove " + label)
+			if tw != nil {
+				tw.Ok("remove " + label)
+			} else {
+				log.Info("removed merged worktree", "branch", wt.branch)
+			}
 			continue
 		}
 
 		if interactive {
 			wasRemoved, err := handleDirtyWorktree(wt)
 			if err != nil {
-				tw.NotOk("remove "+label, map[string]string{
-					"error": err.Error(),
-				})
+				if tw != nil {
+					tw.NotOk("remove "+label, map[string]string{
+						"error": err.Error(),
+					})
+				} else {
+					log.Error("failed to remove worktree", "branch", wt.branch, "error", err)
+				}
 				continue
 			}
 			if wasRemoved {
-				tw.Ok("remove " + label)
+				if tw != nil {
+					tw.Ok("remove " + label)
+				} else {
+					log.Info("removed merged worktree", "branch", wt.branch)
+				}
 			} else {
-				tw.Skip("remove "+label, "kept after interactive review")
+				if tw != nil {
+					tw.Skip("remove "+label, "kept after interactive review")
+				} else {
+					log.Info("kept worktree after interactive review", "branch", wt.branch)
+				}
 			}
 		} else {
-			tw.Skip("remove "+label, "dirty worktree")
+			if tw != nil {
+				tw.Skip("remove "+label, "dirty worktree")
+			} else {
+				log.Warn("skipping dirty worktree", "branch", wt.branch)
+			}
 		}
 	}
 
-	tw.Plan()
+	if tw != nil {
+		tw.Plan()
+	}
 	return nil
 }

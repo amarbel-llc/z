@@ -126,7 +126,12 @@ var cleanCmd = &cobra.Command{
 			return err
 		}
 
-		return clean.Run(home, cleanInteractive)
+		format := outputFormat
+		if format == "" {
+			format = "tap"
+		}
+
+		return clean.Run(home, cleanInteractive, format)
 	},
 }
 
