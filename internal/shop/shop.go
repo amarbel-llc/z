@@ -1,4 +1,4 @@
-package attach
+package shop
 
 import (
 	"fmt"
@@ -21,8 +21,8 @@ import (
 
 var styleCode = lipgloss.NewStyle().Foreground(lipgloss.Color("#E88388")).Background(lipgloss.Color("#1D1F21")).Padding(0, 1)
 
-func Remote(host, path string) error {
-	log.Info("connecting to remote session", "host", host, "path", path)
+func OpenRemote(host, path string) error {
+	log.Info("opening remote shop", "host", host, "path", path)
 	cmd := exec.Command("ssh", "-t", host, "zmx attach "+path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -30,7 +30,7 @@ func Remote(host, path string) error {
 	return cmd.Run()
 }
 
-func Existing(sweatshopPath, format string, claudeArgs []string) error {
+func OpenExisting(sweatshopPath, format string, claudeArgs []string) error {
 	home, _ := os.UserHomeDir()
 	worktreePath := worktree.WorktreePath(home, sweatshopPath)
 	perms.SnapshotSettings(worktreePath)
@@ -48,10 +48,10 @@ func Existing(sweatshopPath, format string, claudeArgs []string) error {
 	cmd.Stdin = os.Stdin
 	_ = cmd.Run() // zmx returns non-zero on detach
 
-	return PostZmx(sweatshopPath, format)
+	return CloseShop(sweatshopPath, format)
 }
 
-func ToPath(sweatshopPath, format string, claudeArgs []string) error {
+func OpenNew(sweatshopPath, format string, claudeArgs []string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return err
@@ -97,10 +97,10 @@ func ToPath(sweatshopPath, format string, claudeArgs []string) error {
 	cmd.Stdin = os.Stdin
 	_ = cmd.Run()
 
-	return PostZmx(sweatshopPath, format)
+	return CloseShop(sweatshopPath, format)
 }
 
-func PostZmx(sweatshopPath, format string) error {
+func CloseShop(sweatshopPath, format string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return nil // not a worktree path, nothing to do
@@ -185,7 +185,7 @@ func PostZmx(sweatshopPath, format string) error {
 	if commitsAhead == 0 && worktreeStatus == "" {
 		if tw != nil {
 			tw.PlanAhead(1)
-			tw.Skip("post-zmx "+styleCode.Render(comp.Worktree), "no changes")
+			tw.Skip("close-shop "+styleCode.Render(comp.Worktree), "no changes")
 		} else {
 			log.Info("no changes in worktree", "worktree", comp.Worktree)
 		}
@@ -212,7 +212,7 @@ func PostZmx(sweatshopPath, format string) error {
 	}
 
 	if action == "Abort" {
-		return Existing(sweatshopPath, format, nil)
+		return OpenExisting(sweatshopPath, format, nil)
 	}
 
 	if tw != nil {
@@ -227,23 +227,23 @@ func chooseAction(worktreeName string, hasUncommitted bool) (string, error) {
 	var header string
 
 	if hasUncommitted {
-		header = fmt.Sprintf("Post-zmx actions for %s (uncommitted changes, will not remove worktree):", worktreeName)
+		header = fmt.Sprintf("Close shop actions for %s (uncommitted changes, will not remove worktree):", worktreeName)
 		options = []huh.Option[string]{
 			huh.NewOption("Pull + Rebase + Merge + Push", "Pull + Rebase + Merge + Push"),
 			huh.NewOption("Rebase + Merge + Push", "Rebase + Merge + Push"),
 			huh.NewOption("Rebase + Merge", "Rebase + Merge"),
 			huh.NewOption("Rebase", "Rebase"),
-			huh.NewOption("Abort (reattach)", "Abort"),
+			huh.NewOption("Abort (reopen shop)", "Abort"),
 		}
 	} else {
-		header = fmt.Sprintf("Post-zmx actions for %s:", worktreeName)
+		header = fmt.Sprintf("Close shop actions for %s:", worktreeName)
 		options = []huh.Option[string]{
 			huh.NewOption("Pull + Rebase + Merge + Remove worktree + Push", "Pull + Rebase + Merge + Remove worktree + Push"),
 			huh.NewOption("Rebase + Merge + Remove worktree + Push", "Rebase + Merge + Remove worktree + Push"),
 			huh.NewOption("Rebase + Merge + Remove worktree", "Rebase + Merge + Remove worktree"),
 			huh.NewOption("Rebase + Merge", "Rebase + Merge"),
 			huh.NewOption("Rebase", "Rebase"),
-			huh.NewOption("Abort (reattach)", "Abort"),
+			huh.NewOption("Abort (reopen shop)", "Abort"),
 		}
 	}
 
@@ -288,9 +288,9 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 		err := runGit(tw, repoPath, "pull")
 		if tapStep(tw, "pull "+styleCode.Render(defaultBranch), err) != nil {
 			if tw == nil {
-				log.Error("pull failed, reattaching to session to resolve")
+				log.Error("pull failed, reopening shop to resolve")
 			}
-			return Existing(sweatshopPath, format, nil)
+			return OpenExisting(sweatshopPath, format, nil)
 		}
 		if tw == nil {
 			log.Info("pulled from origin", "branch", defaultBranch)
@@ -301,9 +301,9 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	err := runGit(tw, worktreePath, "rebase", defaultBranch)
 	if tapStep(tw, "rebase "+styleCode.Render(worktreeName)+" onto "+styleCode.Render(defaultBranch), err) != nil {
 		if tw == nil {
-			log.Error("rebase failed, reattaching to session to resolve conflicts")
+			log.Error("rebase failed, reopening shop to resolve conflicts")
 		}
-		return Existing(sweatshopPath, format, nil)
+		return OpenExisting(sweatshopPath, format, nil)
 	}
 	if tw == nil {
 		log.Info("rebased onto default branch", "worktree", worktreeName, "base", defaultBranch)
@@ -328,7 +328,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 	mergeErr := runGit(tw, repoPath, "merge", worktreeName, "--ff-only")
 	if tapStep(tw, "merge "+styleCode.Render(worktreeName)+" into "+styleCode.Render(defaultBranch), mergeErr) != nil {
 		if tw == nil {
-			log.Error("merge failed (not fast-forward), reattaching to session to resolve")
+			log.Error("merge failed (not fast-forward), reopening shop to resolve")
 		}
 		if repoStashed {
 			runGit(tw, repoPath, "stash", "pop")
@@ -336,7 +336,7 @@ func executeAction(action, repoPath, worktreePath, sweatshopPath, defaultBranch,
 				log.Info("restored stashed changes", "path", repoPath)
 			}
 		}
-		return Existing(sweatshopPath, format, nil)
+		return OpenExisting(sweatshopPath, format, nil)
 	}
 	if tw == nil {
 		log.Info("merged into default branch", "worktree", worktreeName, "base", defaultBranch)

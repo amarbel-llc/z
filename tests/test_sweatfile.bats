@@ -25,7 +25,7 @@ MOCKEOF
 
   # Create eng-area sweatfile.
   # Note: git_excludes must include all generated dotfiles so the worktree
-  # stays clean after creation — otherwise PostZmx triggers interactive
+  # stays clean after creation — otherwise CloseShop triggers interactive
   # prompts that block in a non-TTY test environment.
   cat > "$HOME/eng/sweatfile" <<'EOF'
 git_excludes = [".claude/", ".direnv/", ".envrc", ".sweatshop-env.snapshot"]
@@ -41,21 +41,21 @@ EOF
 }
 
 function sweatfile_creates_dotfiles_from_eng_area_sweatfile { # @test
-  run sweatshop attach "eng/worktrees/testrepo/feature-x" --format tap
+  run sweatshop open "eng/worktrees/testrepo/feature-x" --format tap
   [[ "$status" -eq 0 ]]
   [[ -f "$HOME/eng/worktrees/testrepo/feature-x/.envrc" ]]
   [[ "$(cat "$HOME/eng/worktrees/testrepo/feature-x/.envrc")" == "use flake ." ]]
 }
 
 function sweatfile_writes_sweatshop_env_from_env_section { # @test
-  run sweatshop attach "eng/worktrees/testrepo/feature-env" --format tap
+  run sweatshop open "eng/worktrees/testrepo/feature-env" --format tap
   [[ "$status" -eq 0 ]]
   [[ -f "$HOME/eng/worktrees/testrepo/feature-env/.sweatshop-env" ]]
   grep -q "EDITOR=nvim" "$HOME/eng/worktrees/testrepo/feature-env/.sweatshop-env"
 }
 
 function sweatfile_applies_git_excludes { # @test
-  run sweatshop attach "eng/worktrees/testrepo/feature-exc" --format tap
+  run sweatshop open "eng/worktrees/testrepo/feature-exc" --format tap
   [[ "$status" -eq 0 ]]
   local wt="$HOME/eng/worktrees/testrepo/feature-exc"
   local exclude_path
@@ -77,7 +77,7 @@ function sweatfile_repo_sweatfile_merges_with_eng_area { # @test
 PAGER = "less"
 EOF
 
-  run sweatshop attach "eng/worktrees/testrepo/feature-merge" --format tap
+  run sweatshop open "eng/worktrees/testrepo/feature-merge" --format tap
   [[ "$status" -eq 0 ]]
   local env_file="$HOME/eng/worktrees/testrepo/feature-merge/.sweatshop-env"
   # Should have both EDITOR (inherited from eng-area) and PAGER (from repo)
@@ -91,7 +91,7 @@ function sweatfile_repo_sweatfile_overrides_eng_area_file_entries { # @test
 content = "custom envrc"
 EOF
 
-  run sweatshop attach "eng/worktrees/testrepo/feature-override" --format tap
+  run sweatshop open "eng/worktrees/testrepo/feature-override" --format tap
   [[ "$status" -eq 0 ]]
   local envrc="$HOME/eng/worktrees/testrepo/feature-override/.envrc"
   [[ "$(cat "$envrc")" == "custom envrc" ]]
@@ -105,7 +105,7 @@ function sweatfile_empty_sections_produce_no_dotfiles_or_env { # @test
 git_excludes = [".claude/", ".sweatshop-env.snapshot"]
 EOF
 
-  run sweatshop attach "eng/worktrees/testrepo/feature-empty" --format tap
+  run sweatshop open "eng/worktrees/testrepo/feature-empty" --format tap
   [[ "$status" -eq 0 ]]
   # Worktree should still be created
   [[ -d "$HOME/eng/worktrees/testrepo/feature-empty" ]]

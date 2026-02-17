@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 
-	"github.com/amarbel-llc/sweatshop/internal/attach"
+	"github.com/amarbel-llc/sweatshop/internal/shop"
 	"github.com/amarbel-llc/sweatshop/internal/clean"
 	"github.com/amarbel-llc/sweatshop/internal/completions"
 	"github.com/amarbel-llc/sweatshop/internal/merge"
@@ -21,13 +21,14 @@ var outputFormat string
 var rootCmd = &cobra.Command{
 	Use:   "sweatshop",
 	Short: "Shell-agnostic git worktree session manager",
-	Long:  `sweatshop manages git worktree lifecycles: creating them, attaching to terminal sessions via zmx, and offering post-session workflows.`,
+	Long:  `sweatshop manages git worktree lifecycles: opening shops (creating worktrees + sessions), and offering close shop workflows (rebase, merge, cleanup, push).`,
 }
 
-var attachCmd = &cobra.Command{
-	Use:   "attach [target] [claude args...]",
-	Short: "Attach to a worktree session",
-	Long:  `Attach to an existing or new worktree session. Target format: [host:]<eng_area>/worktrees/<repo>/<branch>. If additional arguments are provided, claude is launched with those arguments instead of a shell.`,
+var openCmd = &cobra.Command{
+	Use:     "open [target] [claude args...]",
+	Aliases: []string{"attach"},
+	Short:   "Open a worktree shop",
+	Long:    `Open an existing or new worktree shop. Target format: [host:]<eng_area>/worktrees/<repo>/<branch>. If additional arguments are provided, claude is launched with those arguments instead of a shell.`,
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		home, err := os.UserHomeDir()
@@ -53,23 +54,23 @@ var attachCmd = &cobra.Command{
 			sweatshopPath := cwd[len(home)+1:]
 
 			if info, err := os.Stat(cwd); err == nil && info.IsDir() {
-				return attach.Existing(sweatshopPath, format, claudeArgs)
+				return shop.OpenExisting(sweatshopPath, format, claudeArgs)
 			}
-			return attach.ToPath(sweatshopPath, format, claudeArgs)
+			return shop.OpenNew(sweatshopPath, format, claudeArgs)
 		}
 
 		target := worktree.ParseTarget(args[0])
 
 		if target.Host != "" {
-			return attach.Remote(target.Host, target.Path)
+			return shop.OpenRemote(target.Host, target.Path)
 		}
 
 		fullPath := home + "/" + target.Path
 		if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
-			return attach.Existing(target.Path, format, claudeArgs)
+			return shop.OpenExisting(target.Path, format, claudeArgs)
 		}
 
-		return attach.ToPath(target.Path, format, claudeArgs)
+		return shop.OpenNew(target.Path, format, claudeArgs)
 	},
 }
 
@@ -106,7 +107,7 @@ var statusCmd = &cobra.Command{
 var mergeCmd = &cobra.Command{
 	Use:   "merge",
 	Short: "Merge current worktree into main",
-	Long:  `Run from inside a worktree. Merges the worktree branch into the main repo with --no-ff, removes the worktree, and detaches from zmx.`,
+	Long:  `Run from inside a worktree. Merges the worktree branch into the main repo with --ff-only and removes the worktree.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return merge.Run()
 	},
@@ -148,7 +149,7 @@ var completionsCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&outputFormat, "format", "", "output format: tap or table")
 	cleanCmd.Flags().BoolVarP(&cleanInteractive, "interactive", "i", false, "interactively discard changes in dirty merged worktrees")
-	rootCmd.AddCommand(attachCmd)
+	rootCmd.AddCommand(openCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(mergeCmd)
 	rootCmd.AddCommand(cleanCmd)

@@ -1,4 +1,4 @@
-package attach
+package shop
 
 import "testing"
 
