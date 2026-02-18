@@ -39,7 +39,9 @@ not ok 4 - pull eng/repos/grit
 
 ### TAP-14 output
 
-Always TAP-14 (no `--format` flag). Uses `github.com/amarbel-llc/tap-dancer/go` for spec-compliant output with proper quoting and severity fields. Trailing plan (`1..N` after all tests).
+Always TAP-14 (no `--format` flag). Uses `internal/tap` for now. Trailing plan (`1..N` after all tests).
+
+**TODO:** Migrate to `github.com/amarbel-llc/tap-dancer/go` for spec-compliant output with proper quoting and severity fields.
 
 Example:
 
