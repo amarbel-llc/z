@@ -136,3 +136,11 @@ func NewestFileTime(path string) time.Time {
 	})
 	return newest
 }
+
+func Pull(repoPath string) (string, error) {
+	return Run(repoPath, "pull")
+}
+
+func Rebase(repoPath, onto string) (string, error) {
+	return Run(repoPath, "rebase", onto)
+}
