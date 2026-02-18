@@ -150,6 +150,38 @@ func TestBuildPermissionString(t *testing.T) {
 	}
 }
 
+func TestMatchSlashStarWildcard(t *testing.T) {
+	rules := []string{"Read(/home/user/eng/worktrees/repo/branch/*)"}
+
+	if !MatchesAnyRule(rules, "Read", map[string]any{"file_path": "/home/user/eng/worktrees/repo/branch/file.go"}) {
+		t.Error("expected file in worktree to match")
+	}
+
+	if !MatchesAnyRule(rules, "Read", map[string]any{"file_path": "/home/user/eng/worktrees/repo/branch/sub/dir/file.go"}) {
+		t.Error("expected nested file in worktree to match")
+	}
+
+	if MatchesAnyRule(rules, "Read", map[string]any{"file_path": "/home/user/eng/worktrees/repo/other/file.go"}) {
+		t.Error("expected file outside worktree not to match")
+	}
+
+	if MatchesAnyRule(rules, "Write", map[string]any{"file_path": "/home/user/eng/worktrees/repo/branch/file.go"}) {
+		t.Error("expected wrong tool not to match")
+	}
+}
+
+func TestMatchSlashStarEdit(t *testing.T) {
+	rules := []string{"Edit(/tmp/wt/*)"}
+
+	if !MatchesAnyRule(rules, "Edit", map[string]any{"file_path": "/tmp/wt/main.go"}) {
+		t.Error("expected Edit in dir to match")
+	}
+
+	if MatchesAnyRule(rules, "Edit", map[string]any{"file_path": "/tmp/other/main.go"}) {
+		t.Error("expected Edit outside dir not to match")
+	}
+}
+
 func TestMatchingRuleName(t *testing.T) {
 	rules := []string{"Read", "Bash(git *)", "mcp__plugin_nix_nix__build"}
 

@@ -84,6 +84,11 @@ func parseRule(rule string) (string, string) {
 //   - "go test:*" -- colon-star: command must start with "go test" (the prefix
 //     before ":*"), matching "go test", "go test ./...", etc.
 func matchPattern(pattern string, command string) bool {
+	if strings.HasSuffix(pattern, "/*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(command, prefix)
+	}
+
 	if strings.HasSuffix(pattern, ":*") {
 		prefix := strings.TrimSuffix(pattern, ":*")
 		return command == prefix || strings.HasPrefix(command, prefix+" ")

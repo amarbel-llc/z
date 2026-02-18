@@ -14,6 +14,7 @@ import (
 // HardcodedExcludes are always written to .git/info/exclude regardless of sweatfile config.
 var HardcodedExcludes = []string{
 	".sweatshop-env",
+	".claude",
 }
 
 func Apply(worktreePath string, sf Sweatfile) error {
