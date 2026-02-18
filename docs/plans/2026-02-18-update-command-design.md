@@ -73,3 +73,8 @@ ok 6 - rebase eng/worktrees/lux/fix-bug # SKIP dirty
 - Dirty detection: `git status --porcelain` (same as status/clean commands)
 - No table output, no `--format` flag
 - No interactive prompts
+
+## Future work
+
+- Migrate TAP output to `github.com/amarbel-llc/tap-dancer/go`
+- Move `internal/git` into `grit` (the git MCP server repo) as a shared library
