@@ -110,7 +110,7 @@ func parseDirtyStatus(porcelain string) string {
 	return strings.Join(parts, " ")
 }
 
-func CollectRepoStatus(home, engArea, repo string) []BranchStatus {
+func CollectRepoStatus(home, engArea, repo string, includeWorktrees bool) []BranchStatus {
 	repoPath := filepath.Join(home, engArea, "repos", repo)
 
 	gitDir := filepath.Join(repoPath, ".git")
@@ -124,6 +124,10 @@ func CollectRepoStatus(home, engArea, repo string) []BranchStatus {
 	mainBranch, err := git.BranchCurrent(repoPath)
 	if err == nil && mainBranch != "" {
 		rows = append(rows, CollectBranchStatus(repoLabel, repoPath, mainBranch))
+	}
+
+	if !includeWorktrees {
+		return rows
 	}
 
 	worktreesDir := filepath.Join(home, engArea, "worktrees", repo)
@@ -152,6 +156,7 @@ func CollectStatus(home string) []BranchStatus {
 
 	for _, reposDir := range matches {
 		engArea := filepath.Base(filepath.Dir(reposDir))
+		includeWorktrees := !strings.HasPrefix(engArea, "eng")
 		entries, err := os.ReadDir(reposDir)
 		if err != nil {
 			continue
@@ -160,7 +165,7 @@ func CollectStatus(home string) []BranchStatus {
 			if !entry.IsDir() {
 				continue
 			}
-			rows := CollectRepoStatus(home, engArea, entry.Name())
+			rows := CollectRepoStatus(home, engArea, entry.Name(), includeWorktrees)
 			all = append(all, rows...)
 		}
 	}
