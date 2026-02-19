@@ -38,13 +38,10 @@
           subPackages = [ "cmd/sweatshop" ];
         };
 
-        spinclass = pkgs.buildGoApplication {
-          pname = "spinclass";
-          inherit version;
-          src = ./.;
-          modules = ./gomod2nix.toml;
-          subPackages = [ "cmd/spinclass" ];
-        };
+        spinclass = pkgs.runCommand "spinclass" { } ''
+          mkdir -p $out/bin
+          ln -s ${sweatshop}/bin/sweatshop $out/bin/spinclass
+        '';
 
         shellCompletions = pkgs.runCommand "sweatshop-completions-files" { } ''
           install -Dm644 ${./completions/sweatshop.bash-completion} \

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
@@ -185,6 +186,7 @@ func init() {
 }
 
 func main() {
+	rootCmd.Use = filepath.Base(os.Args[0])
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
