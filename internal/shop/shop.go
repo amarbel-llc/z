@@ -13,7 +13,6 @@ import (
 
 	"github.com/amarbel-llc/sweatshop/internal/flake"
 	"github.com/amarbel-llc/sweatshop/internal/git"
-	"github.com/amarbel-llc/sweatshop/internal/perms"
 	"github.com/amarbel-llc/sweatshop/internal/tap"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
@@ -29,7 +28,7 @@ func OpenRemote(host, path string) error {
 	return cmd.Run()
 }
 
-func OpenExisting(sweatshopPath, format string, noAttach, integratePerms bool, claudeArgs []string) error {
+func OpenExisting(sweatshopPath, format string, noAttach bool, claudeArgs []string) error {
 	if noAttach {
 		return nil
 	}
@@ -37,12 +36,6 @@ func OpenExisting(sweatshopPath, format string, noAttach, integratePerms bool, c
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return err
-	}
-
-	home, _ := os.UserHomeDir()
-	worktreePath := worktree.WorktreePath(home, sweatshopPath)
-	if integratePerms {
-		perms.SnapshotSettings(worktreePath)
 	}
 
 	zmxArgs := []string{"attach", comp.ShopKey()}
@@ -59,10 +52,10 @@ func OpenExisting(sweatshopPath, format string, noAttach, integratePerms bool, c
 		return fmt.Errorf("zmx attach failed: %w", err)
 	}
 
-	return CloseShop(sweatshopPath, format, integratePerms)
+	return CloseShop(sweatshopPath, format)
 }
 
-func OpenNew(sweatshopPath, format string, noAttach, integratePerms bool, claudeArgs []string) error {
+func OpenNew(sweatshopPath, format string, noAttach bool, claudeArgs []string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return err
@@ -88,10 +81,6 @@ func OpenNew(sweatshopPath, format string, noAttach, integratePerms bool, claude
 		return nil
 	}
 
-	if integratePerms {
-		perms.SnapshotSettings(worktreePath)
-	}
-
 	zmxArgs := []string{"attach", comp.ShopKey()}
 	if len(claudeArgs) > 0 {
 		if flake.HasDevShell(worktreePath) {
@@ -115,10 +104,10 @@ func OpenNew(sweatshopPath, format string, noAttach, integratePerms bool, claude
 		return fmt.Errorf("zmx attach failed: %w", err)
 	}
 
-	return CloseShop(sweatshopPath, format, integratePerms)
+	return CloseShop(sweatshopPath, format)
 }
 
-func CloseShop(sweatshopPath, format string, integratePerms bool) error {
+func CloseShop(sweatshopPath, format string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return nil // not a worktree path, nothing to do
@@ -140,14 +129,6 @@ func CloseShop(sweatshopPath, format string, integratePerms bool) error {
 
 	commitsAhead := git.CommitsAhead(worktreePath, defaultBranch, comp.Worktree)
 	worktreeStatus := git.StatusPorcelain(worktreePath)
-
-	// Review new permissions
-	if integratePerms {
-		if reviewErr := perms.RunReviewInteractive(sweatshopPath); reviewErr != nil {
-			log.Warn("permission review skipped", "error", reviewErr)
-		}
-		perms.CleanupSnapshot(worktreePath)
-	}
 
 	var tw *tap.Writer
 	if format == "tap" {
@@ -184,7 +165,7 @@ func CloseShop(sweatshopPath, format string, integratePerms bool) error {
 	}
 
 	if action == "Abort" {
-		return OpenExisting(sweatshopPath, format, false, integratePerms, nil)
+		return OpenExisting(sweatshopPath, format, false, nil)
 	}
 
 	if tw != nil {

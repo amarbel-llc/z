@@ -235,26 +235,3 @@ func RunReviewInteractive(sweatshopPath string) error {
 	return RouteDecisions(tiersDir, comp.Repo, settingsPath, decisions)
 }
 
-func SnapshotSettings(worktreePath string) error {
-	settingsPath := filepath.Join(worktreePath, ".claude", "settings.local.json")
-	snapshotPath := filepath.Join(worktreePath, ".claude", ".settings-snapshot.json")
-
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return SaveClaudeSettings(snapshotPath, []string{})
-		}
-		return err
-	}
-
-	if err := os.MkdirAll(filepath.Dir(snapshotPath), 0o755); err != nil {
-		return err
-	}
-
-	return os.WriteFile(snapshotPath, data, 0o644)
-}
-
-func CleanupSnapshot(worktreePath string) {
-	snapshotPath := filepath.Join(worktreePath, ".claude", ".settings-snapshot.json")
-	os.Remove(snapshotPath)
-}
