@@ -4,17 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/amarbel-llc/sweatshop/internal/git"
 )
 
 // HardcodedExcludes are always written to .git/info/exclude regardless of sweatfile config.
 var HardcodedExcludes = []string{
-	".sweatshop-env",
 	".claude",
 }
 
@@ -28,18 +24,6 @@ func Apply(worktreePath string, sf Sweatfile) error {
 		if err := applyGitExcludes(excludePath, allExcludes); err != nil {
 			return fmt.Errorf("applying git excludes: %w", err)
 		}
-	}
-
-	if err := ApplyFiles(worktreePath, sf.Files); err != nil {
-		return fmt.Errorf("applying files: %w", err)
-	}
-
-	if err := ApplyEnv(worktreePath, sf.Env); err != nil {
-		return fmt.Errorf("applying env: %w", err)
-	}
-
-	if err := RunSetup(worktreePath, sf.Setup); err != nil {
-		return fmt.Errorf("running setup: %w", err)
 	}
 
 	if err := ApplyClaudeSettings(worktreePath, sf.ClaudeAllow); err != nil {
@@ -77,73 +61,6 @@ func applyGitExcludes(excludePath string, patterns []string) error {
 	return nil
 }
 
-func ApplyFiles(worktreePath string, files map[string]FileEntry) error {
-	for name, entry := range files {
-		dest := filepath.Join(worktreePath, "."+name)
-
-		if _, err := os.Stat(dest); err == nil {
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-
-		if entry.Source != "" {
-			src := expandHome(entry.Source)
-			if err := os.Symlink(src, dest); err != nil {
-				return err
-			}
-		} else if entry.Content != "" {
-			if err := os.WriteFile(dest, []byte(entry.Content), 0o644); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func ApplyEnv(worktreePath string, env map[string]string) error {
-	if len(env) == 0 {
-		return nil
-	}
-
-	keys := make([]string, 0, len(env))
-	for k := range env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var lines []string
-	for _, k := range keys {
-		v := env[k]
-		if v == "" {
-			continue
-		}
-		lines = append(lines, k+"="+v)
-	}
-
-	if len(lines) == 0 {
-		return nil
-	}
-
-	path := filepath.Join(worktreePath, ".sweatshop-env")
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
-}
-
-func RunSetup(worktreePath string, commands []string) error {
-	for _, cmdStr := range commands {
-		cmd := exec.Command("sh", "-c", cmdStr)
-		cmd.Dir = worktreePath
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("setup command %q: %w", cmdStr, err)
-		}
-	}
-	return nil
-}
-
 func ApplyClaudeSettings(worktreePath string, rules []string) error {
 	settingsPath := filepath.Join(worktreePath, ".claude", "settings.local.json")
 
@@ -166,6 +83,7 @@ func ApplyClaudeSettings(worktreePath string, rules []string) error {
 		"Write(//"+worktreePath+"/**)",
 	)
 
+	permsMap["defaultMode"] = "acceptEdits"
 	permsMap["allow"] = allRules
 	doc["permissions"] = permsMap
 
@@ -179,15 +97,4 @@ func ApplyClaudeSettings(worktreePath string, rules []string) error {
 	}
 
 	return os.WriteFile(settingsPath, append(data, '\n'), 0o644)
-}
-
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
