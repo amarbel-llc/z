@@ -24,7 +24,7 @@ func OpenRemote(host, path string) error {
 	return cmd.Run()
 }
 
-func Create(sweatshopPath string) error {
+func Create(sweatshopPath, repoPath string) error {
 	comp, err := worktree.ParsePath(sweatshopPath)
 	if err != nil {
 		return err
@@ -38,7 +38,9 @@ func Create(sweatshopPath string) error {
 	worktreePath := worktree.WorktreePath(home, sweatshopPath)
 
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		repoPath := worktree.RepoPath(home, comp)
+		if repoPath == "" {
+			repoPath = worktree.RepoPath(home, comp)
+		}
 		if err := worktree.Create(comp.EngArea, repoPath, worktreePath); err != nil {
 			return err
 		}
@@ -48,7 +50,7 @@ func Create(sweatshopPath string) error {
 }
 
 func Attach(exec executor.Executor, sweatshopPath, format string, claudeArgs []string) error {
-	if err := Create(sweatshopPath); err != nil {
+	if err := Create(sweatshopPath, ""); err != nil {
 		return err
 	}
 

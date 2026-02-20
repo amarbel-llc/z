@@ -88,6 +88,23 @@ MOCKEOF
   jq -e ".permissions.allow | map(select(startswith(\"Write(\"))) | length > 0" "$settings" >/dev/null
 }
 
+function create_with_repo_flag_uses_custom_repo_path { # @test
+  # Create a repo in a non-standard location (not under eng/repos/)
+  mkdir -p "$HOME/custom/location"
+  git init -q "$HOME/custom/location/myrepo"
+  git -C "$HOME/custom/location/myrepo" commit --allow-empty -m "custom init" -q
+
+  run sweatshop create --repo "$HOME/custom/location/myrepo" "eng/worktrees/myrepo/feature-custom"
+  [[ "$status" -eq 0 ]]
+
+  # Worktree should be created
+  local wt="$HOME/eng/worktrees/myrepo/feature-custom"
+  [[ -d "$wt" ]]
+
+  # Verify the worktree was created from the custom repo
+  git -C "$wt" log --oneline | grep -q "custom init"
+}
+
 function sweatfile_empty_sections_produce_clean_worktree { # @test
   # Replace eng-area sweatfile with minimal content
   cat > "$HOME/eng/sweatfile" <<'EOF'
