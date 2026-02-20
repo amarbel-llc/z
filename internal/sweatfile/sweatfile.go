@@ -9,17 +9,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-type FileEntry struct {
-	Source  string `toml:"source"`
-	Content string `toml:"content"`
-}
-
 type Sweatfile struct {
-	GitExcludes []string             `toml:"git_excludes"`
-	ClaudeAllow []string             `toml:"claude_allow"`
-	Env         map[string]string    `toml:"env"`
-	Files       map[string]FileEntry `toml:"files"`
-	Setup       []string             `toml:"setup"`
+	GitExcludes []string `toml:"git_excludes"`
+	ClaudeAllow []string `toml:"claude_allow"`
 }
 
 func Parse(data []byte) (Sweatfile, error) {
@@ -57,32 +49,6 @@ func Merge(base, repo Sweatfile) Sweatfile {
 			merged.ClaudeAllow = []string{}
 		} else {
 			merged.ClaudeAllow = append(base.ClaudeAllow, repo.ClaudeAllow...)
-		}
-	}
-	if repo.Setup != nil {
-		if len(repo.Setup) == 0 {
-			merged.Setup = []string{}
-		} else {
-			merged.Setup = append(base.Setup, repo.Setup...)
-		}
-	}
-
-	// Maps: shallow merge, repo overrides per-key
-	if repo.Env != nil {
-		if merged.Env == nil {
-			merged.Env = make(map[string]string)
-		}
-		for k, v := range repo.Env {
-			merged.Env[k] = v
-		}
-	}
-
-	if repo.Files != nil {
-		if merged.Files == nil {
-			merged.Files = make(map[string]FileEntry)
-		}
-		for k, v := range repo.Files {
-			merged.Files[k] = v
 		}
 	}
 
