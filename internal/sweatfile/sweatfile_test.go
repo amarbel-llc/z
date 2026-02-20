@@ -104,12 +104,19 @@ git_excludes = [".claude/"]
 git_excludes = [".direnv/"]
 `), 0o644)
 
-	sf, err := LoadMerged(engDir, repoDir)
+	result, err := LoadMerged(engDir, repoDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	sf := result.Merged
 	if len(sf.GitExcludes) != 2 || sf.GitExcludes[0] != ".claude/" || sf.GitExcludes[1] != ".direnv/" {
 		t.Errorf("git_excludes: got %v", sf.GitExcludes)
+	}
+	if len(result.Sources) != 2 {
+		t.Fatalf("expected 2 sources, got %d", len(result.Sources))
+	}
+	if !result.Sources[0].Found || !result.Sources[1].Found {
+		t.Errorf("expected both sources found, got %v %v", result.Sources[0].Found, result.Sources[1].Found)
 	}
 }
 
@@ -174,11 +181,14 @@ func TestMergeClaudeAllowClear(t *testing.T) {
 
 func TestLoadMergedNoFiles(t *testing.T) {
 	dir := t.TempDir()
-	sf, err := LoadMerged(filepath.Join(dir, "eng"), filepath.Join(dir, "repo"))
+	result, err := LoadMerged(filepath.Join(dir, "eng"), filepath.Join(dir, "repo"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if sf.GitExcludes != nil {
-		t.Errorf("expected zero-value sweatfile, got %+v", sf)
+	if result.Merged.GitExcludes != nil {
+		t.Errorf("expected zero-value sweatfile, got %+v", result.Merged)
+	}
+	if result.Sources[0].Found || result.Sources[1].Found {
+		t.Errorf("expected neither source found")
 	}
 }

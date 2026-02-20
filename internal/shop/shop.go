@@ -11,6 +11,7 @@ import (
 	"github.com/amarbel-llc/sweatshop/internal/executor"
 	"github.com/amarbel-llc/sweatshop/internal/flake"
 	"github.com/amarbel-llc/sweatshop/internal/git"
+	"github.com/amarbel-llc/sweatshop/internal/sweatfile"
 	"github.com/amarbel-llc/sweatshop/internal/tap"
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
@@ -24,18 +25,43 @@ func OpenRemote(host, path string) error {
 	return cmd.Run()
 }
 
-func Create(rp worktree.ResolvedPath) error {
+func Create(rp worktree.ResolvedPath, verbose bool) error {
 	if _, err := os.Stat(rp.AbsPath); os.IsNotExist(err) {
-		if err := worktree.Create(rp.EngAreaDir, rp.RepoPath, rp.AbsPath); err != nil {
+		result, err := worktree.Create(rp.EngAreaDir, rp.RepoPath, rp.AbsPath)
+		if err != nil {
 			return err
+		}
+		if verbose {
+			logSweatfileResult(result)
 		}
 	}
 
 	return os.Chdir(rp.AbsPath)
 }
 
+func logSweatfileResult(result sweatfile.LoadResult) {
+	for _, src := range result.Sources {
+		if src.Found {
+			log.Info("loaded sweatfile", "path", src.Path)
+			if len(src.File.GitExcludes) > 0 {
+				log.Info("  git_excludes", "values", src.File.GitExcludes)
+			}
+			if len(src.File.ClaudeAllow) > 0 {
+				log.Info("  claude_allow", "values", src.File.ClaudeAllow)
+			}
+		} else {
+			log.Info("sweatfile not found (skipped)", "path", src.Path)
+		}
+	}
+	merged := result.Merged
+	log.Info("merged sweatfile",
+		"git_excludes", merged.GitExcludes,
+		"claude_allow", merged.ClaudeAllow,
+	)
+}
+
 func Attach(exec executor.Executor, rp worktree.ResolvedPath, format string, claudeArgs []string) error {
-	if err := Create(rp); err != nil {
+	if err := Create(rp, false); err != nil {
 		return err
 	}
 

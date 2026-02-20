@@ -21,6 +21,7 @@ import (
 
 var outputFormat string
 var createRepo string
+var createVerbose bool
 
 var rootCmd = &cobra.Command{
 	Use:   "sweatshop",
@@ -44,7 +45,7 @@ var createCmd = &cobra.Command{
 			return err
 		}
 
-		return shop.Create(rp)
+		return shop.Create(rp, createVerbose)
 	},
 }
 
@@ -182,6 +183,7 @@ var completionsCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&outputFormat, "format", "", "output format: tap or table")
 	createCmd.Flags().StringVar(&createRepo, "repo", "", "absolute path to the base git repository")
+	createCmd.Flags().BoolVarP(&createVerbose, "verbose", "v", false, "print sweatfile loading details")
 	attachCmd.Flags().StringVar(&createRepo, "repo", "", "absolute path to the base git repository")
 	cleanCmd.Flags().BoolVarP(&cleanInteractive, "interactive", "i", false, "interactively discard changes in dirty merged worktrees")
 	rootCmd.AddCommand(createCmd)

@@ -55,24 +55,27 @@ func WorktreePath(home string, sweatshopPath string) string {
 	return filepath.Join(home, sweatshopPath)
 }
 
-func Create(engAreaDir, repoPath, worktreePath string) error {
+func Create(engAreaDir, repoPath, worktreePath string) (sweatfile.LoadResult, error) {
 	if err := os.MkdirAll(worktreePath, 0o755); err != nil {
-		return fmt.Errorf("creating worktree directory: %w", err)
+		return sweatfile.LoadResult{}, fmt.Errorf("creating worktree directory: %w", err)
 	}
 	if err := git.RunPassthrough(repoPath, "worktree", "add", worktreePath); err != nil {
-		return fmt.Errorf("git worktree add: %w", err)
+		return sweatfile.LoadResult{}, fmt.Errorf("git worktree add: %w", err)
 	}
-	var sf sweatfile.Sweatfile
+	var result sweatfile.LoadResult
 	var err error
 	if engAreaDir != "" {
-		sf, err = sweatfile.LoadMerged(engAreaDir, repoPath)
+		result, err = sweatfile.LoadMerged(engAreaDir, repoPath)
 	} else {
-		sf, err = sweatfile.Load(filepath.Join(repoPath, "sweatfile"))
+		result, err = sweatfile.LoadSingle(filepath.Join(repoPath, "sweatfile"))
 	}
 	if err != nil {
-		return fmt.Errorf("loading sweatfile: %w", err)
+		return sweatfile.LoadResult{}, fmt.Errorf("loading sweatfile: %w", err)
 	}
-	return sweatfile.Apply(worktreePath, sf)
+	if err := sweatfile.Apply(worktreePath, result.Merged); err != nil {
+		return sweatfile.LoadResult{}, err
+	}
+	return result, nil
 }
 
 func IsWorktree(path string) bool {

@@ -67,14 +67,59 @@ func Save(path string, sf Sweatfile) error {
 	return toml.NewEncoder(f).Encode(sf)
 }
 
-func LoadMerged(engAreaDir, repoDir string) (Sweatfile, error) {
-	base, err := Load(filepath.Join(engAreaDir, "sweatfile"))
+type LoadSource struct {
+	Path  string
+	Found bool
+	File  Sweatfile
+}
+
+type LoadResult struct {
+	Sources []LoadSource
+	Merged  Sweatfile
+}
+
+func LoadMerged(engAreaDir, repoDir string) (LoadResult, error) {
+	basePath := filepath.Join(engAreaDir, "sweatfile")
+	base, err := Load(basePath)
 	if err != nil {
-		return Sweatfile{}, err
+		return LoadResult{}, err
 	}
-	repo, err := Load(filepath.Join(repoDir, "sweatfile"))
+
+	repoPath := filepath.Join(repoDir, "sweatfile")
+	repo, err := Load(repoPath)
 	if err != nil {
-		return Sweatfile{}, err
+		return LoadResult{}, err
 	}
-	return Merge(base, repo), nil
+
+	_, baseFound := fileExists(basePath)
+	_, repoFound := fileExists(repoPath)
+
+	merged := Merge(base, repo)
+
+	return LoadResult{
+		Sources: []LoadSource{
+			{Path: basePath, Found: baseFound, File: base},
+			{Path: repoPath, Found: repoFound, File: repo},
+		},
+		Merged: merged,
+	}, nil
+}
+
+func fileExists(path string) (os.FileInfo, bool) {
+	info, err := os.Stat(path)
+	return info, err == nil
+}
+
+func LoadSingle(path string) (LoadResult, error) {
+	sf, err := Load(path)
+	if err != nil {
+		return LoadResult{}, err
+	}
+	_, found := fileExists(path)
+	return LoadResult{
+		Sources: []LoadSource{
+			{Path: path, Found: found, File: sf},
+		},
+		Merged: sf,
+	}, nil
 }
