@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/amarbel-llc/sweatshop/internal/claude"
 	"github.com/amarbel-llc/sweatshop/internal/git"
 	"github.com/amarbel-llc/sweatshop/internal/sweatfile"
 )
@@ -75,6 +76,16 @@ func Create(engAreaDir, repoPath, worktreePath string) (sweatfile.LoadResult, er
 	if err := sweatfile.Apply(worktreePath, result.Merged); err != nil {
 		return sweatfile.LoadResult{}, err
 	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return sweatfile.LoadResult{}, fmt.Errorf("getting home directory: %w", err)
+	}
+	claudeJSONPath := filepath.Join(home, ".claude.json")
+	if err := claude.TrustWorkspace(claudeJSONPath, worktreePath); err != nil {
+		return sweatfile.LoadResult{}, fmt.Errorf("trusting workspace in claude: %w", err)
+	}
+
 	return result, nil
 }
 
