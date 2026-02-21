@@ -1,11 +1,8 @@
 # sweatshop - git worktree session manager
 
-default:
-    @just --list
+default: build test
 
-# Build the nix package
-build:
-    nix build
+build: build-gomod2nix build-go
 
 # Build Go binary directly
 build-go: build-gomod2nix
@@ -19,22 +16,20 @@ build-gomod2nix:
 run *ARGS:
     nix run . -- {{ARGS}}
 
-# Run Go unit tests
-test:
+test: test-go test-bats
+
+test-go:
     nix develop --command go test ./...
 
-# Run bats integration tests
-test-bats: build
+test-bats:
     nix develop --command bats --tap tests/
 
 # Format Go code
-fmt:
+fmt-go:
     nix develop --command gofumpt -w .
 
-# Update Go dependencies
-deps:
+update-go: && build-gomod2nix
     nix develop --command go mod tidy
-    nix develop --command gomod2nix
 
 # Clean build artifacts
 clean:
