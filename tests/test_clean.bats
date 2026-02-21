@@ -17,21 +17,19 @@ create_repo_with_commit() {
 create_merged_worktree() {
   local repo_path="$1"
   local branch="$2"
-  local worktree_path="$3"
+  local worktree_path="$repo_path/.worktrees/$branch"
 
   mkdir -p "$(dirname "$worktree_path")"
   git -C "$repo_path" worktree add -q "$worktree_path" -b "$branch"
   # Make a commit so the branch exists, then merge it back
   git -C "$worktree_path" commit --allow-empty -m "worktree commit" -q
-  local main_branch
-  main_branch=$(git -C "$repo_path" branch --show-current)
   git -C "$repo_path" merge "$branch" --ff-only -q
 }
 
 create_unmerged_worktree() {
   local repo_path="$1"
   local branch="$2"
-  local worktree_path="$3"
+  local worktree_path="$repo_path/.worktrees/$branch"
 
   mkdir -p "$(dirname "$worktree_path")"
   git -C "$repo_path" worktree add -q "$worktree_path" -b "$branch"
@@ -41,47 +39,54 @@ create_unmerged_worktree() {
 
 function clean_removes_merged_clean_worktrees { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
-  create_merged_worktree "$HOME/eng/repos/myrepo" "done-branch" "$HOME/eng/worktrees/myrepo/done-branch"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "done-branch"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"TAP version 14"* ]]
-  [[ "$output" == *"ok"*"remove eng/worktrees/myrepo/"*"done-branch"* ]]
-  [[ ! -d "$HOME/eng/worktrees/myrepo/done-branch" ]]
+  [[ "$output" == *"ok"*"remove myrepo/.worktrees/"*"done-branch"* ]]
+  [[ ! -d "$HOME/eng/repos/myrepo/.worktrees/done-branch" ]]
 }
 
 function clean_skips_unmerged_worktrees { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
-  create_unmerged_worktree "$HOME/eng/repos/myrepo" "wip-branch" "$HOME/eng/worktrees/myrepo/wip-branch"
+  create_unmerged_worktree "$HOME/eng/repos/myrepo" "wip-branch"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" != *"remove"*"wip-branch"* ]]
-  [[ -d "$HOME/eng/worktrees/myrepo/wip-branch" ]]
+  [[ -d "$HOME/eng/repos/myrepo/.worktrees/wip-branch" ]]
 }
 
 function clean_skips_dirty_worktrees_without_interactive { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
-  create_merged_worktree "$HOME/eng/repos/myrepo" "dirty-branch" "$HOME/eng/worktrees/myrepo/dirty-branch"
-  echo "uncommitted" >"$HOME/eng/worktrees/myrepo/dirty-branch/dirty.txt"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "dirty-branch"
+  echo "uncommitted" >"$HOME/eng/repos/myrepo/.worktrees/dirty-branch/dirty.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"# SKIP dirty worktree"* ]]
-  [[ -d "$HOME/eng/worktrees/myrepo/dirty-branch" ]]
+  [[ -d "$HOME/eng/repos/myrepo/.worktrees/dirty-branch" ]]
 }
 
 function clean_reports_plan_line { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
-  create_merged_worktree "$HOME/eng/repos/myrepo" "merged-a" "$HOME/eng/worktrees/myrepo/merged-a"
-  create_merged_worktree "$HOME/eng/repos/myrepo" "merged-b" "$HOME/eng/worktrees/myrepo/merged-b"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "merged-a"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "merged-b"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"1..2"* ]]
 }
 
 function clean_shows_message_when_no_worktrees { # @test
+  local empty_dir="$BATS_TEST_TMPDIR/empty"
+  mkdir -p "$empty_dir"
+  cd "$empty_dir"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"# SKIP no worktrees found"* ]]
@@ -89,33 +94,36 @@ function clean_shows_message_when_no_worktrees { # @test
 
 function clean_handles_mixed_merged_and_unmerged { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
-  create_merged_worktree "$HOME/eng/repos/myrepo" "merged" "$HOME/eng/worktrees/myrepo/merged"
-  create_unmerged_worktree "$HOME/eng/repos/myrepo" "unmerged" "$HOME/eng/worktrees/myrepo/unmerged"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "merged"
+  create_unmerged_worktree "$HOME/eng/repos/myrepo" "unmerged"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"1..1"* ]]
-  [[ ! -d "$HOME/eng/worktrees/myrepo/merged" ]]
-  [[ -d "$HOME/eng/worktrees/myrepo/unmerged" ]]
+  [[ ! -d "$HOME/eng/repos/myrepo/.worktrees/merged" ]]
+  [[ -d "$HOME/eng/repos/myrepo/.worktrees/unmerged" ]]
 }
 
-function clean_works_across_eng_areas { # @test
+function clean_works_across_repos { # @test
   create_repo_with_commit "$HOME/eng/repos/repo-a"
-  create_repo_with_commit "$HOME/eng2/repos/repo-b"
-  create_merged_worktree "$HOME/eng/repos/repo-a" "done-a" "$HOME/eng/worktrees/repo-a/done-a"
-  create_merged_worktree "$HOME/eng2/repos/repo-b" "done-b" "$HOME/eng2/worktrees/repo-b/done-b"
+  create_repo_with_commit "$HOME/eng/repos/repo-b"
+  create_merged_worktree "$HOME/eng/repos/repo-a" "done-a"
+  create_merged_worktree "$HOME/eng/repos/repo-b" "done-b"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"1..2"* ]]
-  [[ ! -d "$HOME/eng/worktrees/repo-a/done-a" ]]
-  [[ ! -d "$HOME/eng2/worktrees/repo-b/done-b" ]]
+  [[ ! -d "$HOME/eng/repos/repo-a/.worktrees/done-a" ]]
+  [[ ! -d "$HOME/eng/repos/repo-b/.worktrees/done-b" ]]
 }
 
 function clean_table_format_uses_log_output { # @test
   create_repo_with_commit "$HOME/eng/repos/myrepo"
-  create_merged_worktree "$HOME/eng/repos/myrepo" "done-branch" "$HOME/eng/worktrees/myrepo/done-branch"
+  create_merged_worktree "$HOME/eng/repos/myrepo" "done-branch"
 
+  cd "$HOME/eng/repos"
   run sweatshop clean --format table
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"removed"* ]]

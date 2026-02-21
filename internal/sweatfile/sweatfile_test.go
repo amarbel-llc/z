@@ -90,36 +90,6 @@ func TestMergeBaseOnly(t *testing.T) {
 	}
 }
 
-func TestLoadMerged(t *testing.T) {
-	dir := t.TempDir()
-	engDir := filepath.Join(dir, "eng")
-	repoDir := filepath.Join(dir, "eng", "repos", "myrepo")
-	os.MkdirAll(repoDir, 0o755)
-
-	os.WriteFile(filepath.Join(engDir, "sweatfile"), []byte(`
-git_excludes = [".claude/"]
-`), 0o644)
-
-	os.WriteFile(filepath.Join(repoDir, "sweatfile"), []byte(`
-git_excludes = [".direnv/"]
-`), 0o644)
-
-	result, err := LoadMerged(engDir, repoDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	sf := result.Merged
-	if len(sf.GitExcludes) != 2 || sf.GitExcludes[0] != ".claude/" || sf.GitExcludes[1] != ".direnv/" {
-		t.Errorf("git_excludes: got %v", sf.GitExcludes)
-	}
-	if len(result.Sources) != 2 {
-		t.Fatalf("expected 2 sources, got %d", len(result.Sources))
-	}
-	if !result.Sources[0].Found || !result.Sources[1].Found {
-		t.Errorf("expected both sources found, got %v %v", result.Sources[0].Found, result.Sources[1].Found)
-	}
-}
-
 func TestSaveRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sweatfile")
@@ -179,16 +149,212 @@ func TestMergeClaudeAllowClear(t *testing.T) {
 	}
 }
 
-func TestLoadMergedNoFiles(t *testing.T) {
-	dir := t.TempDir()
-	result, err := LoadMerged(filepath.Join(dir, "eng"), filepath.Join(dir, "repo"))
+func writeSweatfile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("creating directory for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+func TestLoadHierarchyGlobalOnly(t *testing.T) {
+	home := t.TempDir()
+	repoDir := filepath.Join(home, "eng", "repos", "myrepo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	globalPath := filepath.Join(home, ".config", "sweatshop", "sweatfile")
+	writeSweatfile(t, globalPath, `
+git_excludes = [".DS_Store"]
+claude_allow = ["/docs"]
+`)
+
+	result, err := LoadHierarchy(home, repoDir)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("LoadHierarchy returned error: %v", err)
 	}
+
+	// Should have checked: global, eng/sweatfile, eng/repos/sweatfile, myrepo/sweatfile
+	if len(result.Sources) != 4 {
+		t.Fatalf("expected 4 sources, got %d", len(result.Sources))
+	}
+
+	// Only global should be found
+	if !result.Sources[0].Found {
+		t.Error("expected global source to be found")
+	}
+	for i := 1; i < len(result.Sources); i++ {
+		if result.Sources[i].Found {
+			t.Errorf("expected source %d (%s) to not be found", i, result.Sources[i].Path)
+		}
+	}
+
+	if len(result.Merged.GitExcludes) != 1 || result.Merged.GitExcludes[0] != ".DS_Store" {
+		t.Errorf("expected GitExcludes=[.DS_Store], got %v", result.Merged.GitExcludes)
+	}
+	if len(result.Merged.ClaudeAllow) != 1 || result.Merged.ClaudeAllow[0] != "/docs" {
+		t.Errorf("expected ClaudeAllow=[/docs], got %v", result.Merged.ClaudeAllow)
+	}
+}
+
+func TestLoadHierarchyGlobalAndRepo(t *testing.T) {
+	home := t.TempDir()
+	repoDir := filepath.Join(home, "eng", "repos", "myrepo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	globalPath := filepath.Join(home, ".config", "sweatshop", "sweatfile")
+	writeSweatfile(t, globalPath, `
+git_excludes = [".DS_Store"]
+`)
+
+	repoSweatfile := filepath.Join(repoDir, "sweatfile")
+	writeSweatfile(t, repoSweatfile, `
+git_excludes = [".idea"]
+claude_allow = ["/src"]
+`)
+
+	result, err := LoadHierarchy(home, repoDir)
+	if err != nil {
+		t.Fatalf("LoadHierarchy returned error: %v", err)
+	}
+
+	// Merged should have both git_excludes appended
+	if len(result.Merged.GitExcludes) != 2 {
+		t.Fatalf("expected 2 GitExcludes, got %v", result.Merged.GitExcludes)
+	}
+	if result.Merged.GitExcludes[0] != ".DS_Store" || result.Merged.GitExcludes[1] != ".idea" {
+		t.Errorf("expected GitExcludes=[.DS_Store, .idea], got %v", result.Merged.GitExcludes)
+	}
+
+	// ClaudeAllow from repo only
+	if len(result.Merged.ClaudeAllow) != 1 || result.Merged.ClaudeAllow[0] != "/src" {
+		t.Errorf("expected ClaudeAllow=[/src], got %v", result.Merged.ClaudeAllow)
+	}
+}
+
+func TestLoadHierarchyParentDir(t *testing.T) {
+	home := t.TempDir()
+	repoDir := filepath.Join(home, "eng", "repos", "myrepo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	globalPath := filepath.Join(home, ".config", "sweatshop", "sweatfile")
+	writeSweatfile(t, globalPath, `
+git_excludes = [".DS_Store"]
+`)
+
+	parentPath := filepath.Join(home, "eng", "sweatfile")
+	writeSweatfile(t, parentPath, `
+git_excludes = [".envrc"]
+claude_allow = ["/eng-docs"]
+`)
+
+	repoSweatfile := filepath.Join(repoDir, "sweatfile")
+	writeSweatfile(t, repoSweatfile, `
+claude_allow = ["/src"]
+`)
+
+	result, err := LoadHierarchy(home, repoDir)
+	if err != nil {
+		t.Fatalf("LoadHierarchy returned error: %v", err)
+	}
+
+	// git_excludes: global .DS_Store + parent .envrc = [.DS_Store, .envrc]
+	// repo has nil git_excludes so inherits
+	if len(result.Merged.GitExcludes) != 2 {
+		t.Fatalf("expected 2 GitExcludes, got %v", result.Merged.GitExcludes)
+	}
+	if result.Merged.GitExcludes[0] != ".DS_Store" || result.Merged.GitExcludes[1] != ".envrc" {
+		t.Errorf("expected GitExcludes=[.DS_Store, .envrc], got %v", result.Merged.GitExcludes)
+	}
+
+	// claude_allow: parent /eng-docs + repo /src = [/eng-docs, /src]
+	if len(result.Merged.ClaudeAllow) != 2 {
+		t.Fatalf("expected 2 ClaudeAllow, got %v", result.Merged.ClaudeAllow)
+	}
+	if result.Merged.ClaudeAllow[0] != "/eng-docs" || result.Merged.ClaudeAllow[1] != "/src" {
+		t.Errorf("expected ClaudeAllow=[/eng-docs, /src], got %v", result.Merged.ClaudeAllow)
+	}
+
+	// Verify sources: global found, eng/sweatfile found, eng/repos/sweatfile not found, myrepo/sweatfile found
+	if !result.Sources[0].Found {
+		t.Error("expected global source to be found")
+	}
+	if !result.Sources[1].Found {
+		t.Error("expected eng/sweatfile source to be found")
+	}
+	if result.Sources[2].Found {
+		t.Error("expected eng/repos/sweatfile source to not be found")
+	}
+	if !result.Sources[3].Found {
+		t.Error("expected repo sweatfile source to be found")
+	}
+}
+
+func TestLoadHierarchyNoSweatfiles(t *testing.T) {
+	home := t.TempDir()
+	repoDir := filepath.Join(home, "eng", "repos", "myrepo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LoadHierarchy(home, repoDir)
+	if err != nil {
+		t.Fatalf("LoadHierarchy returned error: %v", err)
+	}
+
+	// All sources should be not found
+	for i, src := range result.Sources {
+		if src.Found {
+			t.Errorf("expected source %d (%s) to not be found", i, src.Path)
+		}
+	}
+
+	// Merged should be empty
 	if result.Merged.GitExcludes != nil {
-		t.Errorf("expected zero-value sweatfile, got %+v", result.Merged)
+		t.Errorf("expected nil GitExcludes, got %v", result.Merged.GitExcludes)
 	}
-	if result.Sources[0].Found || result.Sources[1].Found {
-		t.Errorf("expected neither source found")
+	if result.Merged.ClaudeAllow != nil {
+		t.Errorf("expected nil ClaudeAllow, got %v", result.Merged.ClaudeAllow)
+	}
+}
+
+func TestLoadHierarchyRepoOverridesParent(t *testing.T) {
+	home := t.TempDir()
+	repoDir := filepath.Join(home, "eng", "repos", "myrepo")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	parentPath := filepath.Join(home, "eng", "sweatfile")
+	writeSweatfile(t, parentPath, `
+git_excludes = [".DS_Store", ".envrc"]
+claude_allow = ["/docs"]
+`)
+
+	// Repo sweatfile with empty arrays clears parent values
+	repoSweatfile := filepath.Join(repoDir, "sweatfile")
+	writeSweatfile(t, repoSweatfile, `
+git_excludes = []
+claude_allow = []
+`)
+
+	result, err := LoadHierarchy(home, repoDir)
+	if err != nil {
+		t.Fatalf("LoadHierarchy returned error: %v", err)
+	}
+
+	// Empty arrays should clear parent values
+	if result.Merged.GitExcludes == nil || len(result.Merged.GitExcludes) != 0 {
+		t.Errorf("expected empty GitExcludes (cleared by repo), got %v", result.Merged.GitExcludes)
+	}
+	if result.Merged.ClaudeAllow == nil || len(result.Merged.ClaudeAllow) != 0 {
+		t.Errorf("expected empty ClaudeAllow (cleared by repo), got %v", result.Merged.ClaudeAllow)
 	}
 }

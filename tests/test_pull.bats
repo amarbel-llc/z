@@ -34,7 +34,7 @@ push_remote_commit() {
 create_worktree() {
   local repo_path="$1"
   local branch="$2"
-  local worktree_path="$3"
+  local worktree_path="$repo_path/.worktrees/$branch"
 
   mkdir -p "$(dirname "$worktree_path")"
   git -C "$repo_path" worktree add -q "$worktree_path" -b "$branch"
@@ -46,10 +46,11 @@ function pull_pulls_clean_repos { # @test
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
   push_remote_commit "$bare"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"TAP version 14"* ]]
-  [[ "$output" == *"ok"*"pull eng/repos/myrepo"* ]]
+  [[ "$output" == *"ok"*"pull myrepo"* ]]
 }
 
 function pull_skips_dirty_repos_without_flag { # @test
@@ -57,6 +58,7 @@ function pull_skips_dirty_repos_without_flag { # @test
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
   echo "uncommitted" > "$HOME/eng/repos/myrepo/dirty.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"# SKIP dirty"* ]]
@@ -67,28 +69,31 @@ function pull_includes_dirty_repos_with_flag { # @test
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
   echo "uncommitted" > "$HOME/eng/repos/myrepo/dirty.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull --dirty
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"ok"*"pull eng/repos/myrepo"* ]]
+  [[ "$output" == *"ok"*"pull myrepo"* ]]
   [[ "$output" != *"# SKIP"* ]]
 }
 
 function pull_rebases_clean_worktrees { # @test
   local bare="$BATS_TEST_TMPDIR/bare/myrepo.git"
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
-  create_worktree "$HOME/eng/repos/myrepo" "feature-x" "$HOME/eng/worktrees/myrepo/feature-x"
+  create_worktree "$HOME/eng/repos/myrepo" "feature-x"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"ok"*"rebase eng/worktrees/myrepo/feature-x"* ]]
+  [[ "$output" == *"ok"*"rebase myrepo/.worktrees/feature-x"* ]]
 }
 
 function pull_skips_dirty_worktrees_without_flag { # @test
   local bare="$BATS_TEST_TMPDIR/bare/myrepo.git"
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
-  create_worktree "$HOME/eng/repos/myrepo" "feature-x" "$HOME/eng/worktrees/myrepo/feature-x"
-  echo "uncommitted" > "$HOME/eng/worktrees/myrepo/feature-x/dirty.txt"
+  create_worktree "$HOME/eng/repos/myrepo" "feature-x"
+  echo "uncommitted" > "$HOME/eng/repos/myrepo/.worktrees/feature-x/dirty.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"rebase"*"# SKIP dirty"* ]]
@@ -97,40 +102,46 @@ function pull_skips_dirty_worktrees_without_flag { # @test
 function pull_includes_dirty_worktrees_with_flag { # @test
   local bare="$BATS_TEST_TMPDIR/bare/myrepo.git"
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
-  create_worktree "$HOME/eng/repos/myrepo" "feature-x" "$HOME/eng/worktrees/myrepo/feature-x"
-  echo "uncommitted" > "$HOME/eng/worktrees/myrepo/feature-x/dirty.txt"
+  create_worktree "$HOME/eng/repos/myrepo" "feature-x"
+  echo "uncommitted" > "$HOME/eng/repos/myrepo/.worktrees/feature-x/dirty.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull -d
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"ok"*"rebase eng/worktrees/myrepo/feature-x"* ]]
+  [[ "$output" == *"ok"*"rebase myrepo/.worktrees/feature-x"* ]]
 }
 
 function pull_reports_plan_line { # @test
   local bare="$BATS_TEST_TMPDIR/bare/myrepo.git"
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
-  create_worktree "$HOME/eng/repos/myrepo" "feature-x" "$HOME/eng/worktrees/myrepo/feature-x"
+  create_worktree "$HOME/eng/repos/myrepo" "feature-x"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"1..2"* ]]
 }
 
 function pull_shows_skip_when_no_repos { # @test
+  local empty_dir="$BATS_TEST_TMPDIR/empty"
+  mkdir -p "$empty_dir"
+  cd "$empty_dir"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"# SKIP no repos found"* ]]
 }
 
-function pull_works_across_eng_areas { # @test
+function pull_works_across_repos { # @test
   local bare_a="$BATS_TEST_TMPDIR/bare/repo-a.git"
   local bare_b="$BATS_TEST_TMPDIR/bare/repo-b.git"
   create_repo_with_remote "$HOME/eng/repos/repo-a" "$bare_a"
-  create_repo_with_remote "$HOME/eng2/repos/repo-b" "$bare_b"
+  create_repo_with_remote "$HOME/eng/repos/repo-b" "$bare_b"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"pull eng/repos/repo-a"* ]]
-  [[ "$output" == *"pull eng2/repos/repo-b"* ]]
+  [[ "$output" == *"pull repo-a"* ]]
+  [[ "$output" == *"pull repo-b"* ]]
   [[ "$output" == *"1..2"* ]]
 }
 
@@ -139,7 +150,8 @@ function pull_short_flag_d_works { # @test
   create_repo_with_remote "$HOME/eng/repos/myrepo" "$bare"
   echo "uncommitted" > "$HOME/eng/repos/myrepo/dirty.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop pull -d
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"ok"*"pull eng/repos/myrepo"* ]]
+  [[ "$output" == *"ok"*"pull myrepo"* ]]
 }

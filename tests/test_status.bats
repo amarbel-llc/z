@@ -14,40 +14,48 @@ create_mock_repo() {
   git -C "$repo_path" commit --allow-empty -m "init" -q
 }
 
-function status_discovers_repos_across_eng_areas { # @test
-  create_mock_repo "$HOME/eng/repos/repo-a"
-  create_mock_repo "$HOME/eng2/repos/repo-b"
-
-  run sweatshop status
-  [[ "$status" -eq 0 ]]
-  [[ "$output" == *"eng/repos/repo-a"* ]]
-  [[ "$output" == *"eng2/repos/repo-b"* ]]
+add_worktree() {
+  local repo_path="$1"
+  local branch="$2"
+  local wt_path="$repo_path/.worktrees/$branch"
+  git -C "$repo_path" worktree add -q "$wt_path" -b "$branch"
+  # Exclude .worktrees from git status (matches real Create behavior)
+  local exclude="$repo_path/.git/info/exclude"
+  mkdir -p "$(dirname "$exclude")"
+  if ! grep -qF ".worktrees" "$exclude" 2>/dev/null; then
+    echo ".worktrees" >> "$exclude"
+  fi
 }
 
-function status_handles_repos_with_no_worktrees { # @test
-  create_mock_repo "$HOME/eng/repos/solo-repo"
+function status_discovers_multiple_repos { # @test
+  create_mock_repo "$HOME/eng/repos/repo-a"
+  add_worktree "$HOME/eng/repos/repo-a" "wt-a"
+  create_mock_repo "$HOME/eng/repos/repo-b"
+  add_worktree "$HOME/eng/repos/repo-b" "wt-b"
 
+  cd "$HOME/eng/repos"
   run sweatshop status
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"eng/repos/solo-repo"* ]]
+  [[ "$output" == *"repo-a"* ]]
+  [[ "$output" == *"repo-b"* ]]
 }
 
 function status_handles_repos_with_worktrees { # @test
   create_mock_repo "$HOME/eng/repos/myrepo"
+  add_worktree "$HOME/eng/repos/myrepo" "feature-x"
 
-  local worktree_path="$HOME/eng/worktrees/myrepo/feature-x"
-  mkdir -p "$(dirname "$worktree_path")"
-  git -C "$HOME/eng/repos/myrepo" worktree add -q "$worktree_path"
-
+  cd "$HOME/eng/repos"
   run sweatshop status
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"eng/repos/myrepo"* ]]
+  [[ "$output" == *"myrepo"* ]]
   [[ "$output" == *"feature-x"* ]]
 }
 
 function status_shows_clean_for_clean_repo { # @test
   create_mock_repo "$HOME/eng/repos/clean-repo"
+  add_worktree "$HOME/eng/repos/clean-repo" "wt"
 
+  cd "$HOME/eng/repos"
   run sweatshop status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"clean"* ]]
@@ -55,14 +63,19 @@ function status_shows_clean_for_clean_repo { # @test
 
 function status_shows_dirty_count { # @test
   create_mock_repo "$HOME/eng/repos/dirty-repo"
+  add_worktree "$HOME/eng/repos/dirty-repo" "wt"
   echo "change" >"$HOME/eng/repos/dirty-repo/file.txt"
 
+  cd "$HOME/eng/repos"
   run sweatshop status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"1?"* ]]
 }
 
 function status_shows_no_repos_message { # @test
+  local empty_dir="$BATS_TEST_TMPDIR/empty"
+  mkdir -p "$empty_dir"
+  cd "$empty_dir"
   run sweatshop status
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"no repos found"* ]]
@@ -71,6 +84,7 @@ function status_shows_no_repos_message { # @test
 function status_skips_non_git_directories { # @test
   mkdir -p "$HOME/eng/repos/not-a-repo"
 
+  cd "$HOME/eng/repos"
   run sweatshop status
   [[ "$status" -eq 0 ]]
   [[ "$output" != *"not-a-repo"* ]]
@@ -78,10 +92,12 @@ function status_skips_non_git_directories { # @test
 
 function status_tap_format_outputs_tap { # @test
   create_mock_repo "$HOME/eng/repos/repo-a"
+  add_worktree "$HOME/eng/repos/repo-a" "wt"
 
+  cd "$HOME/eng/repos"
   run sweatshop status --format tap
   [[ "$status" -eq 0 ]]
   [[ "$output" == *"TAP version 14"* ]]
-  [[ "$output" == *"ok"*"eng/repos/repo-a"* ]]
+  [[ "$output" == *"ok"*"repo-a"* ]]
   [[ "$output" == *"1.."* ]]
 }

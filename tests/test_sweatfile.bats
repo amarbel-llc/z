@@ -19,16 +19,17 @@ MOCKEOF
   git init -q "$HOME/eng/repos/testrepo"
   git -C "$HOME/eng/repos/testrepo" commit --allow-empty -m "init" -q
 
-  # Create eng-area sweatfile with only git_excludes
+  # Create parent-directory sweatfile (LoadHierarchy walks parents from home to repo)
   cat > "$HOME/eng/sweatfile" <<'EOF'
 git_excludes = [".claude/", ".direnv/"]
 EOF
 }
 
 function sweatfile_applies_git_excludes { # @test
-  run sweatshop attach "eng/worktrees/testrepo/feature-exc" --format tap
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop attach "feature-exc" --format tap
   [[ "$status" -eq 0 ]]
-  local wt="$HOME/eng/worktrees/testrepo/feature-exc"
+  local wt="$HOME/eng/repos/testrepo/.worktrees/feature-exc"
   local exclude_path
   exclude_path="$(git -C "$wt" rev-parse --git-path info/exclude)"
   if [[ ! "$exclude_path" = /* ]]; then
@@ -38,20 +39,21 @@ function sweatfile_applies_git_excludes { # @test
   grep -q ".direnv/" "$exclude_path"
 }
 
-function sweatfile_repo_sweatfile_merges_with_eng_area { # @test
+function sweatfile_repo_sweatfile_merges_with_parent_dir { # @test
   cat > "$HOME/eng/repos/testrepo/sweatfile" <<'EOF'
 git_excludes = [".envrc"]
 EOF
 
-  run sweatshop attach "eng/worktrees/testrepo/feature-merge" --format tap
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop attach "feature-merge" --format tap
   [[ "$status" -eq 0 ]]
-  local wt="$HOME/eng/worktrees/testrepo/feature-merge"
+  local wt="$HOME/eng/repos/testrepo/.worktrees/feature-merge"
   local exclude_path
   exclude_path="$(git -C "$wt" rev-parse --git-path info/exclude)"
   if [[ ! "$exclude_path" = /* ]]; then
     exclude_path="$wt/$exclude_path"
   fi
-  # Should have both eng-area and repo excludes
+  # Should have both parent-dir and repo excludes
   grep -q ".claude/" "$exclude_path"
   grep -q ".direnv/" "$exclude_path"
   grep -q ".envrc" "$exclude_path"
@@ -66,15 +68,16 @@ exit 0
 MOCKEOF
   chmod +x "$MOCK_BIN/mock-shell"
 
-  run sweatshop create "eng/worktrees/testrepo/feature-create"
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop create "feature-create"
   [[ "$status" -eq 0 ]]
   # Worktree should be created
-  [[ -d "$HOME/eng/worktrees/testrepo/feature-create" ]]
+  [[ -d "$HOME/eng/repos/testrepo/.worktrees/feature-create" ]]
   # Shell should NOT have been called
   [[ ! -f "$HOME/.shell-was-called" ]]
 
   # Claude settings should be generated
-  local wt="$HOME/eng/worktrees/testrepo/feature-create"
+  local wt="$HOME/eng/repos/testrepo/.worktrees/feature-create"
   local settings="$wt/.claude/settings.local.json"
   [[ -f "$settings" ]]
 
@@ -88,17 +91,18 @@ MOCKEOF
   jq -e ".permissions.allow | map(select(startswith(\"Write(\"))) | length > 0" "$settings" >/dev/null
 }
 
-function create_with_repo_flag_uses_custom_repo_path { # @test
-  # Create a repo in a non-standard location (not under eng/repos/)
-  mkdir -p "$HOME/custom/location"
+function create_from_custom_repo { # @test
+  # Create a repo in a non-standard location
+  mkdir -p "$HOME/custom/location/myrepo"
   git init -q "$HOME/custom/location/myrepo"
   git -C "$HOME/custom/location/myrepo" commit --allow-empty -m "custom init" -q
 
-  run sweatshop create --repo "$HOME/custom/location/myrepo" "eng/worktrees/myrepo/feature-custom"
+  cd "$HOME/custom/location/myrepo"
+  run sweatshop create "feature-custom"
   [[ "$status" -eq 0 ]]
 
   # Worktree should be created
-  local wt="$HOME/eng/worktrees/myrepo/feature-custom"
+  local wt="$HOME/custom/location/myrepo/.worktrees/feature-custom"
   [[ -d "$wt" ]]
 
   # Verify the worktree was created from the custom repo
@@ -106,20 +110,22 @@ function create_with_repo_flag_uses_custom_repo_path { # @test
 }
 
 function sweatfile_empty_sections_produce_clean_worktree { # @test
-  # Replace eng-area sweatfile with minimal content
+  # Replace parent-dir sweatfile with minimal content
   cat > "$HOME/eng/sweatfile" <<'EOF'
 git_excludes = [".claude/"]
 EOF
 
-  run sweatshop attach "eng/worktrees/testrepo/feature-empty" --format tap
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop attach "feature-empty" --format tap
   [[ "$status" -eq 0 ]]
   # Worktree should still be created
-  [[ -d "$HOME/eng/worktrees/testrepo/feature-empty" ]]
+  [[ -d "$HOME/eng/repos/testrepo/.worktrees/feature-empty" ]]
 }
 
 function create_with_arbitrary_absolute_path { # @test
   local wt="$BATS_TEST_TMPDIR/arbitrary-wt"
-  run sweatshop create --repo "$HOME/eng/repos/testrepo" "$wt"
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop create "$wt"
   [[ "$status" -eq 0 ]]
   # Worktree should be created at the arbitrary path
   [[ -d "$wt" ]]
@@ -128,10 +134,11 @@ function create_with_arbitrary_absolute_path { # @test
 }
 
 function create_trusts_worktree_in_claude_json { # @test
-  run sweatshop create "eng/worktrees/testrepo/feature-trust"
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop create "feature-trust"
   [[ "$status" -eq 0 ]]
 
-  local wt="$HOME/eng/worktrees/testrepo/feature-trust"
+  local wt="$HOME/eng/repos/testrepo/.worktrees/feature-trust"
   local claude_json="$HOME/.claude.json"
   [[ -f "$claude_json" ]]
 
@@ -154,10 +161,11 @@ function create_trust_preserves_existing_claude_json { # @test
 }
 JSONEOF
 
-  run sweatshop create "eng/worktrees/testrepo/feature-trust-preserve"
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop create "feature-trust-preserve"
   [[ "$status" -eq 0 ]]
 
-  local wt="$HOME/eng/worktrees/testrepo/feature-trust-preserve"
+  local wt="$HOME/eng/repos/testrepo/.worktrees/feature-trust-preserve"
   local claude_json="$HOME/.claude.json"
 
   # New worktree should be trusted
@@ -176,16 +184,19 @@ JSONEOF
   [[ "$startups" = "42" ]]
 }
 
-function create_arbitrary_path_without_repo_fails { # @test
-  local wt="$BATS_TEST_TMPDIR/no-repo-wt"
-  run sweatshop create "$wt"
+function create_outside_git_repo_fails { # @test
+  local non_repo="$BATS_TEST_TMPDIR/not-a-repo"
+  mkdir -p "$non_repo"
+  cd "$non_repo"
+  run sweatshop create "some-branch"
   [[ "$status" -ne 0 ]]
-  [[ "$output" == *"--repo is required"* ]]
+  [[ "$output" == *"no git repository"* ]]
 }
 
 function attach_with_arbitrary_path { # @test
   local wt="$BATS_TEST_TMPDIR/arbitrary-attach"
-  run sweatshop attach --repo "$HOME/eng/repos/testrepo" "$wt" --format tap
+  cd "$HOME/eng/repos/testrepo"
+  run sweatshop attach "$wt" --format tap
   [[ "$status" -eq 0 ]]
   # Worktree should be created
   [[ -d "$wt" ]]

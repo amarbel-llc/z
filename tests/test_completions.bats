@@ -7,37 +7,48 @@ setup() {
   setup_mock_path
 }
 
-function completions_lists_repos_as_new_worktree { # @test
-  mkdir -p "$HOME/eng/repos/myrepo"
+create_mock_repo() {
+  local repo_path="$1"
+  mkdir -p "$repo_path"
+  git -C "$repo_path" init -q
+  git -C "$repo_path" commit --allow-empty -m "init" -q
+}
 
+function completions_lists_repos_as_new_worktree { # @test
+  create_mock_repo "$HOME/eng/repos/myrepo"
+
+  cd "$HOME/eng/repos"
   run sweatshop completions
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"eng/worktrees/myrepo/"*"new worktree"* ]]
+  [[ "$output" == *"myrepo/"*"new worktree"* ]]
 }
 
 function completions_lists_existing_worktrees { # @test
-  mkdir -p "$HOME/eng/repos/myrepo"
-  mkdir -p "$HOME/eng/worktrees/myrepo/feature-x"
-  echo "gitdir: $HOME/eng/repos/myrepo/.git/worktrees/feature-x" > "$HOME/eng/worktrees/myrepo/feature-x/.git"
+  create_mock_repo "$HOME/eng/repos/myrepo"
+  local wt_path="$HOME/eng/repos/myrepo/.worktrees/feature-x"
+  git -C "$HOME/eng/repos/myrepo" worktree add -q "$wt_path" -b "feature-x"
 
+  cd "$HOME/eng/repos"
   run sweatshop completions
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"eng/worktrees/myrepo/feature-x"*"existing worktree"* ]]
+  [[ "$output" == *"myrepo/.worktrees/feature-x"*"existing worktree"* ]]
 }
 
-function completions_handles_multiple_eng_areas { # @test
-  mkdir -p "$HOME/eng/repos/repo-a"
-  mkdir -p "$HOME/eng2/repos/repo-b"
+function completions_handles_multiple_repos { # @test
+  create_mock_repo "$HOME/eng/repos/repo-a"
+  create_mock_repo "$HOME/eng/repos/repo-b"
 
+  cd "$HOME/eng/repos"
   run sweatshop completions
   [[ "$status" -eq 0 ]]
-  [[ "$output" == *"eng/worktrees/repo-a/"* ]]
-  [[ "$output" == *"eng2/worktrees/repo-b/"* ]]
+  [[ "$output" == *"repo-a/"* ]]
+  [[ "$output" == *"repo-b/"* ]]
 }
 
 function completions_output_is_tab_separated { # @test
-  mkdir -p "$HOME/eng/repos/myrepo"
+  create_mock_repo "$HOME/eng/repos/myrepo"
 
+  cd "$HOME/eng/repos"
   run sweatshop completions
   [[ "$status" -eq 0 ]]
   local line
@@ -46,6 +57,9 @@ function completions_output_is_tab_separated { # @test
 }
 
 function completions_handles_no_repos { # @test
+  local empty_dir="$BATS_TEST_TMPDIR/empty"
+  mkdir -p "$empty_dir"
+  cd "$empty_dir"
   run sweatshop completions
   [[ "$status" -eq 0 ]]
 }

@@ -2,177 +2,352 @@ package worktree
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
-func TestParseTargetLocal(t *testing.T) {
-	target := ParseTarget("eng/worktrees/myrepo/mybranch")
-	if target.Host != "" {
-		t.Errorf("expected empty host, got %q", target.Host)
-	}
-	if target.Path != "eng/worktrees/myrepo/mybranch" {
-		t.Errorf("expected path eng/worktrees/myrepo/mybranch, got %q", target.Path)
-	}
-}
-
-func TestParseTargetRemote(t *testing.T) {
-	target := ParseTarget("vm-host:eng/worktrees/myrepo/mybranch")
-	if target.Host != "vm-host" {
-		t.Errorf("expected host vm-host, got %q", target.Host)
-	}
-	if target.Path != "eng/worktrees/myrepo/mybranch" {
-		t.Errorf("expected path eng/worktrees/myrepo/mybranch, got %q", target.Path)
-	}
-}
-
-func TestParseTargetNoColon(t *testing.T) {
-	target := ParseTarget("simple/path")
-	if target.Host != "" {
-		t.Errorf("expected empty host, got %q", target.Host)
-	}
-	if target.Path != "simple/path" {
-		t.Errorf("expected path simple/path, got %q", target.Path)
-	}
-}
-
-func TestParseTargetPreservesRemotePath(t *testing.T) {
-	target := ParseTarget("myhost:eng2/worktrees/dodder/feature-x")
-	if target.Host != "myhost" {
-		t.Errorf("expected host myhost, got %q", target.Host)
-	}
-	if target.Path != "eng2/worktrees/dodder/feature-x" {
-		t.Errorf("expected path eng2/worktrees/dodder/feature-x, got %q", target.Path)
-	}
-}
-
-func TestParsePathValid(t *testing.T) {
-	comp, err := ParsePath("eng/worktrees/myrepo/feature-x")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if comp.EngArea != "eng" {
-		t.Errorf("expected eng, got %q", comp.EngArea)
-	}
-	if comp.Repo != "myrepo" {
-		t.Errorf("expected myrepo, got %q", comp.Repo)
-	}
-	if comp.Worktree != "feature-x" {
-		t.Errorf("expected feature-x, got %q", comp.Worktree)
-	}
-}
-
-func TestShopKey(t *testing.T) {
-	comp := PathComponents{EngArea: "eng", Repo: "purse-first", Worktree: "other-marketplaces"}
-	got := comp.ShopKey()
-	want := "eng/purse-first/other-marketplaces"
-	if got != want {
-		t.Errorf("ShopKey() = %q, want %q", got, want)
-	}
-}
-
-func TestParsePathInvalid(t *testing.T) {
-	_, err := ParsePath("eng/repos/myrepo")
-	if err == nil {
-		t.Error("expected error for invalid path")
-	}
-}
-
-func TestResolvePathConvention(t *testing.T) {
+func TestResolvePathBranchName(t *testing.T) {
 	home := t.TempDir()
-	rp, err := ResolvePath(home, "eng/worktrees/myrepo/feature-x", "")
+	repoPath := filepath.Join(home, "repos", "myrepo")
+
+	rp, err := ResolvePath(repoPath, "feature-x")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !rp.Convention {
-		t.Error("expected Convention=true")
+
+	wantAbs := filepath.Join(repoPath, ".worktrees", "feature-x")
+	if rp.AbsPath != wantAbs {
+		t.Errorf("AbsPath = %q, want %q", rp.AbsPath, wantAbs)
 	}
 	if rp.Branch != "feature-x" {
-		t.Errorf("expected branch feature-x, got %q", rp.Branch)
+		t.Errorf("Branch = %q, want %q", rp.Branch, "feature-x")
 	}
-	if rp.SessionKey != "eng/myrepo/feature-x" {
-		t.Errorf("expected session key eng/myrepo/feature-x, got %q", rp.SessionKey)
-	}
-	if rp.AbsPath != home+"/eng/worktrees/myrepo/feature-x" {
-		t.Errorf("unexpected AbsPath: %q", rp.AbsPath)
-	}
-	if rp.EngAreaDir != home+"/eng" {
-		t.Errorf("expected EngAreaDir %q, got %q", home+"/eng", rp.EngAreaDir)
+	if rp.RepoPath != repoPath {
+		t.Errorf("RepoPath = %q, want %q", rp.RepoPath, repoPath)
 	}
 }
 
-func TestResolvePathConventionWithRepoFlag(t *testing.T) {
+func TestResolvePathRelativePath(t *testing.T) {
 	home := t.TempDir()
-	rp, err := ResolvePath(home, "eng/worktrees/myrepo/feature-x", "/custom/repo")
+	repoPath := filepath.Join(home, "repos", "myrepo")
+
+	rp, err := ResolvePath(repoPath, ".worktrees/feature-x")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if rp.RepoPath != "/custom/repo" {
-		t.Errorf("expected RepoPath /custom/repo, got %q", rp.RepoPath)
+
+	wantAbs := filepath.Join(repoPath, ".worktrees", "feature-x")
+	if rp.AbsPath != wantAbs {
+		t.Errorf("AbsPath = %q, want %q", rp.AbsPath, wantAbs)
+	}
+	if rp.Branch != "feature-x" {
+		t.Errorf("Branch = %q, want %q", rp.Branch, "feature-x")
 	}
 }
 
-func TestResolvePathArbitraryWithRepo(t *testing.T) {
+func TestResolvePathAbsolutePath(t *testing.T) {
 	home := t.TempDir()
-	rp, err := ResolvePath(home, "/tmp/my-worktree", "/some/repo")
+	repoPath := filepath.Join(home, "repos", "myrepo")
+	absTarget := "/tmp/my-custom-worktree"
+
+	rp, err := ResolvePath(repoPath, absTarget)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if rp.Convention {
-		t.Error("expected Convention=false")
+
+	if rp.AbsPath != absTarget {
+		t.Errorf("AbsPath = %q, want %q", rp.AbsPath, absTarget)
 	}
-	if rp.AbsPath != "/tmp/my-worktree" {
-		t.Errorf("expected AbsPath /tmp/my-worktree, got %q", rp.AbsPath)
+	if rp.Branch != "my-custom-worktree" {
+		t.Errorf("Branch = %q, want %q", rp.Branch, "my-custom-worktree")
 	}
-	if rp.RepoPath != "/some/repo" {
-		t.Errorf("expected RepoPath /some/repo, got %q", rp.RepoPath)
-	}
-	if rp.Branch != "my-worktree" {
-		t.Errorf("expected branch my-worktree, got %q", rp.Branch)
-	}
-	if rp.SessionKey != "/tmp/my-worktree" {
-		t.Errorf("expected session key /tmp/my-worktree, got %q", rp.SessionKey)
+	if rp.RepoPath != repoPath {
+		t.Errorf("RepoPath = %q, want %q", rp.RepoPath, repoPath)
 	}
 }
 
-func TestResolvePathArbitraryUnderHomeStripsPrefix(t *testing.T) {
+func TestResolvePathSessionKey(t *testing.T) {
 	home := t.TempDir()
-	absPath := home + "/projects/my-worktree"
-	rp, err := ResolvePath(home, absPath, "/some/repo")
+	repoPath := filepath.Join(home, "repos", "myrepo")
+
+	rp, err := ResolvePath(repoPath, "feature-x")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if rp.SessionKey != "projects/my-worktree" {
-		t.Errorf("expected session key projects/my-worktree, got %q", rp.SessionKey)
+
+	wantKey := "myrepo/feature-x"
+	if rp.SessionKey != wantKey {
+		t.Errorf("SessionKey = %q, want %q", rp.SessionKey, wantKey)
 	}
 }
 
-func TestResolvePathArbitraryWithoutRepoFails(t *testing.T) {
+func TestResolvePathSessionKeyAbsolutePath(t *testing.T) {
 	home := t.TempDir()
-	_, err := ResolvePath(home, "/tmp/new-worktree", "")
+	repoPath := filepath.Join(home, "repos", "dodder")
+
+	rp, err := ResolvePath(repoPath, "/tmp/custom-wt")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantKey := "dodder/custom-wt"
+	if rp.SessionKey != wantKey {
+		t.Errorf("SessionKey = %q, want %q", rp.SessionKey, wantKey)
+	}
+}
+
+func TestDetectRepoFindsGitDir(t *testing.T) {
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "myrepo")
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	subDir := filepath.Join(repoDir, "src", "pkg")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DetectRepo(subDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != repoDir {
+		t.Errorf("DetectRepo() = %q, want %q", got, repoDir)
+	}
+}
+
+func TestDetectRepoSkipsGitFile(t *testing.T) {
+	root := t.TempDir()
+	// Create a parent repo with a .git directory
+	parentRepo := filepath.Join(root, "parent")
+	if err := os.MkdirAll(filepath.Join(parentRepo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Create a worktree-like child with a .git file (not directory)
+	child := filepath.Join(parentRepo, "child")
+	if err := os.MkdirAll(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(child, ".git"), []byte("gitdir: ../parent/.git/worktrees/child"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DetectRepo(child)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != parentRepo {
+		t.Errorf("DetectRepo() = %q, want %q (should skip .git file and find parent)", got, parentRepo)
+	}
+}
+
+func TestDetectRepoFailsOutsideRepo(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := DetectRepo(dir)
 	if err == nil {
-		t.Error("expected error for non-convention path without --repo")
+		t.Error("expected error when no git repo found, got nil")
 	}
 }
 
-func TestFindEngAreaDirPositive(t *testing.T) {
-	home := t.TempDir()
-	engDir := home + "/eng"
-	if err := os.MkdirAll(engDir+"/worktrees/repo/branch", 0o755); err != nil {
+func TestScanReposFromRepo(t *testing.T) {
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "myrepo")
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(engDir+"/sweatfile", []byte(""), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(repoDir, WorktreesDir), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got := findEngAreaDir(engDir+"/worktrees/repo/branch", home)
-	if got != engDir {
-		t.Errorf("expected %q, got %q", engDir, got)
+
+	repos := ScanRepos(repoDir)
+	if len(repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(repos))
+	}
+	if repos[0] != repoDir {
+		t.Errorf("repos[0] = %q, want %q", repos[0], repoDir)
 	}
 }
 
-func TestFindEngAreaDirNegative(t *testing.T) {
-	home := t.TempDir()
-	got := findEngAreaDir("/tmp/random/path", home)
-	if got != "" {
-		t.Errorf("expected empty string, got %q", got)
+func TestScanReposFromParent(t *testing.T) {
+	root := t.TempDir()
+
+	// Create two repos with .worktrees
+	for _, name := range []string{"repo-a", "repo-b"} {
+		repoDir := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(repoDir, WorktreesDir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create a repo without .worktrees (should be excluded)
+	noWtRepo := filepath.Join(root, "repo-c")
+	if err := os.MkdirAll(filepath.Join(noWtRepo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	repos := ScanRepos(root)
+	if len(repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d: %v", len(repos), repos)
+	}
+
+	found := make(map[string]bool)
+	for _, r := range repos {
+		found[filepath.Base(r)] = true
+	}
+	if !found["repo-a"] || !found["repo-b"] {
+		t.Errorf("expected repo-a and repo-b, got %v", repos)
+	}
+}
+
+func TestScanReposEmpty(t *testing.T) {
+	root := t.TempDir()
+
+	repos := ScanRepos(root)
+	if len(repos) != 0 {
+		t.Errorf("expected 0 repos, got %d: %v", len(repos), repos)
+	}
+}
+
+func TestListWorktrees(t *testing.T) {
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "myrepo")
+	wtDir := filepath.Join(repoDir, WorktreesDir)
+
+	branches := []string{"feature-a", "feature-b", "bugfix-1"}
+	for _, b := range branches {
+		branchDir := filepath.Join(wtDir, b)
+		if err := os.MkdirAll(branchDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// Create .git file to mark as worktree
+		if err := os.WriteFile(filepath.Join(branchDir, ".git"), []byte("gitdir: ../../../.git/worktrees/"+b+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Also create a file (should be excluded)
+	if err := os.WriteFile(filepath.Join(wtDir, "not-a-dir"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a plain directory (not a worktree — no .git file)
+	if err := os.MkdirAll(filepath.Join(wtDir, "not-a-worktree"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ListWorktrees(repoDir)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 worktrees, got %d: %v", len(got), got)
+	}
+
+	found := make(map[string]bool)
+	for _, wt := range got {
+		found[filepath.Base(wt)] = true
+		if !filepath.IsAbs(wt) {
+			t.Errorf("expected absolute path, got %q", wt)
+		}
+	}
+	for _, b := range branches {
+		if !found[b] {
+			t.Errorf("missing worktree %q in results %v", b, got)
+		}
+	}
+}
+
+func TestListWorktreesEmpty(t *testing.T) {
+	root := t.TempDir()
+
+	got := ListWorktrees(root)
+	if got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+}
+
+func TestIsWorktreeWithGitFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: somewhere"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !IsWorktree(dir) {
+		t.Error("expected IsWorktree=true for .git file")
+	}
+}
+
+func TestIsWorktreeWithGitDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if IsWorktree(dir) {
+		t.Error("expected IsWorktree=false for .git directory")
+	}
+}
+
+func TestIsWorktreeNoGit(t *testing.T) {
+	dir := t.TempDir()
+
+	if IsWorktree(dir) {
+		t.Error("expected IsWorktree=false for directory without .git")
+	}
+}
+
+func TestExcludeWorktreesDir(t *testing.T) {
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "myrepo")
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git", "info"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// First call should add the entry
+	if err := excludeWorktreesDir(repoDir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != ".worktrees\n" {
+		t.Errorf("expected '.worktrees\\n', got %q", string(data))
+	}
+
+	// Second call should be idempotent
+	if err := excludeWorktreesDir(repoDir); err != nil {
+		t.Fatalf("unexpected error on second call: %v", err)
+	}
+
+	data, err = os.ReadFile(filepath.Join(repoDir, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != ".worktrees\n" {
+		t.Errorf("expected idempotent result '.worktrees\\n', got %q", string(data))
+	}
+}
+
+func TestExcludeWorktreesDirCreatesInfoDir(t *testing.T) {
+	root := t.TempDir()
+	repoDir := filepath.Join(root, "myrepo")
+	// Only create .git, not .git/info
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := excludeWorktreesDir(repoDir); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != ".worktrees\n" {
+		t.Errorf("expected '.worktrees\\n', got %q", string(data))
 	}
 }

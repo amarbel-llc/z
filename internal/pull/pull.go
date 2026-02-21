@@ -7,17 +7,16 @@ import (
 
 	"github.com/amarbel-llc/sweatshop/internal/git"
 	"github.com/amarbel-llc/sweatshop/internal/tap"
+	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
 
 type repoInfo struct {
-	engArea  string
 	name     string
 	repoPath string
 	dirty    bool
 }
 
 type worktreeInfo struct {
-	engArea      string
 	repo         string
 	branch       string
 	repoPath     string
@@ -25,59 +24,56 @@ type worktreeInfo struct {
 	dirty        bool
 }
 
-func scanRepos(home string) []repoInfo {
+func scanRepos(startDir string) []repoInfo {
 	var repos []repoInfo
 
-	pattern := filepath.Join(home, "eng*", "repos")
-	matches, _ := filepath.Glob(pattern)
+	// If startDir is a repo, return just that
+	gitDir := filepath.Join(startDir, ".git")
+	if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
+		porcelain := git.StatusPorcelain(startDir)
+		repos = append(repos, repoInfo{
+			name:     filepath.Base(startDir),
+			repoPath: startDir,
+			dirty:    porcelain != "",
+		})
+		return repos
+	}
 
-	for _, reposDir := range matches {
-		engArea := filepath.Base(filepath.Dir(reposDir))
-		entries, err := os.ReadDir(reposDir)
-		if err != nil {
+	// Otherwise scan children
+	entries, err := os.ReadDir(startDir)
+	if err != nil {
+		return repos
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
 			continue
 		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			repoPath := filepath.Join(reposDir, entry.Name())
-			gitDir := filepath.Join(repoPath, ".git")
-			if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
-				continue
-			}
-			porcelain := git.StatusPorcelain(repoPath)
-			repos = append(repos, repoInfo{
-				engArea:  engArea,
-				name:     entry.Name(),
-				repoPath: repoPath,
-				dirty:    porcelain != "",
-			})
+		repoPath := filepath.Join(startDir, entry.Name())
+		childGitDir := filepath.Join(repoPath, ".git")
+		if info, err := os.Stat(childGitDir); err != nil || !info.IsDir() {
+			continue
 		}
+		porcelain := git.StatusPorcelain(repoPath)
+		repos = append(repos, repoInfo{
+			name:     entry.Name(),
+			repoPath: repoPath,
+			dirty:    porcelain != "",
+		})
 	}
 
 	return repos
 }
 
-func scanWorktrees(home string, repos []repoInfo) []worktreeInfo {
+func scanWorktrees(repos []repoInfo) []worktreeInfo {
 	var worktrees []worktreeInfo
 
 	for _, repo := range repos {
-		wtDir := filepath.Join(home, repo.engArea, "worktrees", repo.name)
-		entries, err := os.ReadDir(wtDir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			wtPath := filepath.Join(wtDir, entry.Name())
+		for _, wtPath := range worktree.ListWorktrees(repo.repoPath) {
+			branch := filepath.Base(wtPath)
 			porcelain := git.StatusPorcelain(wtPath)
 			worktrees = append(worktrees, worktreeInfo{
-				engArea:      repo.engArea,
 				repo:         repo.name,
-				branch:       entry.Name(),
+				branch:       branch,
 				repoPath:     repo.repoPath,
 				worktreePath: wtPath,
 				dirty:        porcelain != "",
@@ -88,11 +84,11 @@ func scanWorktrees(home string, repos []repoInfo) []worktreeInfo {
 	return worktrees
 }
 
-func Run(home string, dirty bool) error {
+func Run(startDir string, dirty bool) error {
 	tw := tap.NewWriter(os.Stdout)
 
-	repos := scanRepos(home)
-	worktrees := scanWorktrees(home, repos)
+	repos := scanRepos(startDir)
+	worktrees := scanWorktrees(repos)
 
 	if len(repos) == 0 && len(worktrees) == 0 {
 		tw.Skip("pull", "no repos found")
@@ -103,7 +99,7 @@ func Run(home string, dirty bool) error {
 	var failed bool
 
 	for _, repo := range repos {
-		label := repo.engArea + "/repos/" + repo.name
+		label := repo.name
 
 		if repo.dirty && !dirty {
 			tw.Skip("pull "+label, "dirty")
@@ -123,7 +119,7 @@ func Run(home string, dirty bool) error {
 	}
 
 	for _, wt := range worktrees {
-		label := wt.engArea + "/worktrees/" + wt.repo + "/" + wt.branch
+		label := wt.repo + "/.worktrees/" + wt.branch
 
 		if wt.dirty && !dirty {
 			tw.Skip("rebase "+label, "dirty")

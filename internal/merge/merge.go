@@ -8,41 +8,22 @@ import (
 
 	"github.com/amarbel-llc/sweatshop/internal/executor"
 	"github.com/amarbel-llc/sweatshop/internal/git"
-	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
 
 func Run(exec executor.Executor) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	var repoPath, branch string
-
-	// Try convention path first
-	if len(cwd) > len(home)+1 {
-		currentPath := cwd[len(home)+1:]
-		if comp, parseErr := worktree.ParsePath(currentPath); parseErr == nil {
-			repoPath = worktree.RepoPath(home, comp)
-			branch = comp.Worktree
-		}
+	repoPath, err := git.CommonDir(cwd)
+	if err != nil {
+		return fmt.Errorf("not in a worktree directory: %s", cwd)
 	}
 
-	// Fall back to git-based detection
-	if repoPath == "" {
-		repoPath, err = git.CommonDir(cwd)
-		if err != nil {
-			return fmt.Errorf("not in a worktree directory: %s", cwd)
-		}
-		branch, err = git.BranchCurrent(cwd)
-		if err != nil {
-			return fmt.Errorf("could not determine current branch: %w", err)
-		}
+	branch, err := git.BranchCurrent(cwd)
+	if err != nil {
+		return fmt.Errorf("could not determine current branch: %w", err)
 	}
 
 	if info, err := os.Stat(repoPath); err != nil || !info.IsDir() {

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`sweatshop` is a shell-agnostic git worktree session manager that wraps `zmx` (a terminal multiplexer session manager). It manages the lifecycle of git worktrees: creating them in a convention-based directory structure, attaching to terminal sessions via zmx, and offering post-session workflows (rebase, merge, cleanup, push). Supports both local and remote (SSH) worktrees.
+`sweatshop` is a shell-agnostic git worktree session manager that wraps `zmx` (a terminal multiplexer session manager). It manages the lifecycle of git worktrees: creating them inside repositories at `<repo>/.worktrees/<branch>`, attaching to terminal sessions via zmx, and offering post-session workflows (merge, cleanup, pull/rebase).
 
 Written in Go with cobra for CLI, lipgloss/table for styled output, huh for interactive prompts, and charmbracelet/log for structured logging.
 
@@ -30,17 +30,31 @@ Single Go binary with cobra subcommands:
 ```
 cmd/sweatshop/main.go              # cobra root + subcommand registration
 internal/
-  attach/attach.go                  # attach subcommand (local, remote, post-zmx with huh prompts)
-  merge/merge.go                    # merge subcommand (--no-ff merge, worktree remove, zmx detach)
-  completions/completions.go        # completions subcommand (local + remote scanning)
+  shop/shop.go                      # create/attach orchestration
+  merge/merge.go                    # merge subcommand (--ff-only merge, worktree remove)
+  clean/clean.go                    # clean subcommand (remove merged worktrees)
+  pull/pull.go                      # pull subcommand (pull repos, rebase worktrees)
+  completions/completions.go        # completions subcommand (PWD-relative scanning)
   status/status.go                  # status subcommand + lipgloss table rendering
-  worktree/worktree.go              # shared: path parsing, worktree creation, rcm overlay
+  worktree/worktree.go              # shared: path resolution, worktree creation, scanning
+  sweatfile/sweatfile.go            # sweatfile parsing, hierarchy loading, merging
   git/git.go                        # shared: git command execution helpers
+  claude/claude.go                  # Claude Code workspace trust management
+  perms/cmd.go                      # permission review subcommand
 ```
 
-### Convention-based directory layout
+### Worktree directory layout
 
-All paths are relative to `$HOME` and follow: `<eng_area>/worktrees/<repo>/<branch>`. Repositories live at `<eng_area>/repos/<repo>`. The rcm-worktrees overlay copies dotfiles from `<eng_area>/rcm-worktrees/` into new worktrees as hidden files.
+Worktrees live inside each repository at `<repo>/.worktrees/<branch>`. The `.worktrees` directory is added to `.git/info/exclude` on first worktree creation. All commands are PWD-relative: run from inside a repo to operate on that repo, or from a parent directory to scan child repos.
+
+### Sweatfile hierarchy
+
+Sweatfile configuration is loaded from multiple locations, merged top-down:
+1. Global: `~/.config/sweatshop/sweatfile`
+2. Parent directories walking down from `$HOME` to the repo
+3. Repo: `<repo>/sweatfile`
+
+Arrays use nil=inherit, empty=clear, non-empty=append semantics.
 
 ### Nix packaging
 
@@ -48,8 +62,8 @@ Uses `buildGoApplication` with gomod2nix. The Go devenv is inherited from `fried
 
 ## Testing
 
-- **Go unit tests**: `internal/worktree/`, `internal/status/`, `internal/completions/` — test target parsing, path validation, dirty status parsing, table rendering, completion generation
-- **Bats integration tests**: `tests/test_status.bats`, `tests/test_completions.bats` — test the compiled binary with isolated HOME directories and mock git repos
+- **Go unit tests**: `internal/worktree/`, `internal/sweatfile/`, `internal/status/`, `internal/completions/`, `internal/claude/` — test path resolution, sweatfile loading/merging, dirty status parsing, table rendering, completion generation, workspace trust
+- **Bats integration tests**: `tests/` — test the compiled binary with isolated HOME directories and mock git repos (status, completions, sweatfile, clean, pull)
 
 ## Notes
 

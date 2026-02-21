@@ -3,7 +3,6 @@ package shop
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/log"
@@ -16,18 +15,9 @@ import (
 	"github.com/amarbel-llc/sweatshop/internal/worktree"
 )
 
-func OpenRemote(host, path string) error {
-	log.Info("opening remote shop", "host", host, "path", path)
-	cmd := exec.Command("ssh", "-t", host, "zmx attach "+path)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
-}
-
 func Create(rp worktree.ResolvedPath, verbose bool) error {
 	if _, err := os.Stat(rp.AbsPath); os.IsNotExist(err) {
-		result, err := worktree.Create(rp.EngAreaDir, rp.RepoPath, rp.AbsPath)
+		result, err := worktree.Create(rp.RepoPath, rp.AbsPath)
 		if err != nil {
 			return err
 		}

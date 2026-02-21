@@ -54,7 +54,6 @@ func (fc FileChange) Description() string {
 }
 
 type worktreeInfo struct {
-	engArea      string
 	repo         string
 	branch       string
 	repoPath     string
@@ -63,61 +62,32 @@ type worktreeInfo struct {
 	dirty        bool
 }
 
-func scanWorktrees(home string) []worktreeInfo {
+func scanWorktrees(startDir string) []worktreeInfo {
 	var worktrees []worktreeInfo
 
-	pattern := filepath.Join(home, "eng*", "repos")
-	matches, _ := filepath.Glob(pattern)
+	repos := worktree.ScanRepos(startDir)
+	for _, repoPath := range repos {
+		repoName := filepath.Base(repoPath)
 
-	for _, reposDir := range matches {
-		engArea := filepath.Base(filepath.Dir(reposDir))
-		repos, err := os.ReadDir(reposDir)
-		if err != nil {
+		defaultBranch, err := git.DefaultBranch(repoPath)
+		if err != nil || defaultBranch == "" {
 			continue
 		}
-		for _, repo := range repos {
-			if !repo.IsDir() {
-				continue
-			}
-			repoPath := filepath.Join(reposDir, repo.Name())
-			gitDir := filepath.Join(repoPath, ".git")
-			if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
-				continue
-			}
 
-			defaultBranch, err := git.DefaultBranch(repoPath)
-			if err != nil || defaultBranch == "" {
-				continue
-			}
+		for _, wtPath := range worktree.ListWorktrees(repoPath) {
+			branch := filepath.Base(wtPath)
 
-			wtDir := filepath.Join(home, engArea, "worktrees", repo.Name())
-			entries, err := os.ReadDir(wtDir)
-			if err != nil {
-				continue
-			}
-			for _, entry := range entries {
-				if !entry.IsDir() {
-					continue
-				}
-				wtPath := filepath.Join(wtDir, entry.Name())
-				if !worktree.IsWorktree(wtPath) {
-					continue
-				}
-				branch := entry.Name()
+			ahead := git.CommitsAhead(wtPath, defaultBranch, branch)
+			porcelain := git.StatusPorcelain(wtPath)
 
-				ahead := git.CommitsAhead(wtPath, defaultBranch, branch)
-				porcelain := git.StatusPorcelain(wtPath)
-
-				worktrees = append(worktrees, worktreeInfo{
-					engArea:      engArea,
-					repo:         repo.Name(),
-					branch:       branch,
-					repoPath:     repoPath,
-					worktreePath: wtPath,
-					merged:       ahead == 0,
-					dirty:        porcelain != "",
-				})
-			}
+			worktrees = append(worktrees, worktreeInfo{
+				repo:         repoName,
+				branch:       branch,
+				repoPath:     repoPath,
+				worktreePath: wtPath,
+				merged:       ahead == 0,
+				dirty:        porcelain != "",
+			})
 		}
 	}
 
@@ -178,13 +148,13 @@ func handleDirtyWorktree(wt worktreeInfo) (removed bool, err error) {
 	return true, nil
 }
 
-func Run(home string, interactive bool, format string) error {
+func Run(startDir string, interactive bool, format string) error {
 	var tw *tap.Writer
 	if format == "tap" {
 		tw = tap.NewWriter(os.Stdout)
 	}
 
-	worktrees := scanWorktrees(home)
+	worktrees := scanWorktrees(startDir)
 	if len(worktrees) == 0 {
 		if tw != nil {
 			tw.Skip("clean", "no worktrees found")
@@ -200,7 +170,7 @@ func Run(home string, interactive bool, format string) error {
 			continue
 		}
 
-		label := wt.engArea + "/worktrees/" + wt.repo + "/" + styleCode.Render(wt.branch)
+		label := wt.repo + "/.worktrees/" + styleCode.Render(wt.branch)
 
 		if !wt.dirty {
 			if err := removeWorktree(wt); err != nil {

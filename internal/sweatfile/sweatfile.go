@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -78,30 +79,56 @@ type LoadResult struct {
 	Merged  Sweatfile
 }
 
-func LoadMerged(engAreaDir, repoDir string) (LoadResult, error) {
-	basePath := filepath.Join(engAreaDir, "sweatfile")
-	base, err := Load(basePath)
-	if err != nil {
+
+func LoadHierarchy(home, repoDir string) (LoadResult, error) {
+	var sources []LoadSource
+	merged := Sweatfile{}
+
+	loadAndMerge := func(path string) error {
+		sf, err := Load(path)
+		if err != nil {
+			return err
+		}
+		_, found := fileExists(path)
+		sources = append(sources, LoadSource{Path: path, Found: found, File: sf})
+		if found {
+			merged = Merge(merged, sf)
+		}
+		return nil
+	}
+
+	// 1. Global config
+	globalPath := filepath.Join(home, ".config", "sweatshop", "sweatfile")
+	if err := loadAndMerge(globalPath); err != nil {
 		return LoadResult{}, err
 	}
 
-	repoPath := filepath.Join(repoDir, "sweatfile")
-	repo, err := Load(repoPath)
-	if err != nil {
-		return LoadResult{}, err
+	// 2. Parent directories walking DOWN from home to repo dir
+	cleanHome := filepath.Clean(home)
+	cleanRepo := filepath.Clean(repoDir)
+
+	rel, err := filepath.Rel(cleanHome, cleanRepo)
+	if err == nil && !strings.HasPrefix(rel, "..") && rel != "." {
+		parts := strings.Split(rel, string(filepath.Separator))
+		// Walk each intermediate directory (excluding repo dir itself)
+		for i := 1; i < len(parts); i++ {
+			parentDir := filepath.Join(cleanHome, filepath.Join(parts[:i]...))
+			parentPath := filepath.Join(parentDir, "sweatfile")
+			if err := loadAndMerge(parentPath); err != nil {
+				return LoadResult{}, err
+			}
+		}
 	}
 
-	_, baseFound := fileExists(basePath)
-	_, repoFound := fileExists(repoPath)
-
-	merged := Merge(base, repo)
+	// 3. Repo sweatfile
+	repoPath := filepath.Join(cleanRepo, "sweatfile")
+	if err := loadAndMerge(repoPath); err != nil {
+		return LoadResult{}, err
+	}
 
 	return LoadResult{
-		Sources: []LoadSource{
-			{Path: basePath, Found: baseFound, File: base},
-			{Path: repoPath, Found: repoFound, File: repo},
-		},
-		Merged: merged,
+		Sources: sources,
+		Merged:  merged,
 	}, nil
 }
 
@@ -110,16 +137,3 @@ func fileExists(path string) (os.FileInfo, bool) {
 	return info, err == nil
 }
 
-func LoadSingle(path string) (LoadResult, error) {
-	sf, err := Load(path)
-	if err != nil {
-		return LoadResult{}, err
-	}
-	_, found := fileExists(path)
-	return LoadResult{
-		Sources: []LoadSource{
-			{Path: path, Found: found, File: sf},
-		},
-		Merged: sf,
-	}, nil
-}

@@ -3,7 +3,6 @@ package status
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -111,15 +110,8 @@ func parseDirtyStatus(porcelain string) string {
 	return strings.Join(parts, " ")
 }
 
-func CollectRepoStatus(home, engArea, repo string) []BranchStatus {
-	repoPath := filepath.Join(home, engArea, "repos", repo)
-
-	gitDir := filepath.Join(repoPath, ".git")
-	if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
-		return nil
-	}
-
-	repoLabel := engArea + "/repos/" + repo
+func CollectRepoStatus(repoPath string) []BranchStatus {
+	repoLabel := filepath.Base(repoPath)
 	var rows []BranchStatus
 
 	mainBranch, err := git.BranchCurrent(repoPath)
@@ -127,20 +119,9 @@ func CollectRepoStatus(home, engArea, repo string) []BranchStatus {
 		rows = append(rows, CollectBranchStatus(repoLabel, repoPath, mainBranch))
 	}
 
-	worktreesDir := filepath.Join(home, engArea, "worktrees", repo)
-	entries, err := os.ReadDir(worktreesDir)
-	if err != nil {
-		return rows
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		wtPath := filepath.Join(worktreesDir, entry.Name())
-		if !worktree.IsWorktree(wtPath) {
-			continue
-		}
-		bs := CollectBranchStatus(repoLabel, wtPath, entry.Name())
+	for _, wtPath := range worktree.ListWorktrees(repoPath) {
+		branch := filepath.Base(wtPath)
+		bs := CollectBranchStatus(repoLabel, wtPath, branch)
 		bs.IsWorktree = true
 		rows = append(rows, bs)
 	}
@@ -148,25 +129,13 @@ func CollectRepoStatus(home, engArea, repo string) []BranchStatus {
 	return rows
 }
 
-func CollectStatus(home string) []BranchStatus {
+func CollectStatus(startDir string) []BranchStatus {
 	var all []BranchStatus
 
-	pattern := filepath.Join(home, "eng*", "repos")
-	matches, _ := filepath.Glob(pattern)
-
-	for _, reposDir := range matches {
-		engArea := filepath.Base(filepath.Dir(reposDir))
-		entries, err := os.ReadDir(reposDir)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			rows := CollectRepoStatus(home, engArea, entry.Name())
-			all = append(all, rows...)
-		}
+	repos := worktree.ScanRepos(startDir)
+	for _, repoPath := range repos {
+		rows := CollectRepoStatus(repoPath)
+		all = append(all, rows...)
 	}
 
 	return all

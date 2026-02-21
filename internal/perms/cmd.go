@@ -40,11 +40,36 @@ func newCheckCmd() *cobra.Command {
 
 func newReviewCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "review <sweatshop-path>",
+		Use:   "review [worktree-path]",
 		Short: "Interactively review new permissions from a session",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return RunReviewInteractive(args[0])
+			var worktreePath string
+			if len(args) > 0 {
+				worktreePath = args[0]
+			} else {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				worktreePath = cwd
+			}
+
+			if !filepath.IsAbs(worktreePath) {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				worktreePath = filepath.Join(cwd, worktreePath)
+			}
+
+			repoPath, err := worktree.DetectRepo(worktreePath)
+			if err != nil {
+				return fmt.Errorf("could not detect repo: %w", err)
+			}
+			repoName := filepath.Base(repoPath)
+
+			return RunReviewInteractive(worktreePath, repoName)
 		},
 	}
 }
@@ -176,18 +201,7 @@ func newEditCmd() *cobra.Command {
 	return cmd
 }
 
-func RunReviewInteractive(sweatshopPath string) error {
-	comp, err := worktree.ParsePath(sweatshopPath)
-	if err != nil {
-		return err
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	worktreePath := worktree.WorktreePath(home, sweatshopPath)
+func RunReviewInteractive(worktreePath, repoName string) error {
 	settingsPath := filepath.Join(worktreePath, ".claude", "settings.local.json")
 	snapshotPath := filepath.Join(worktreePath, ".claude", ".settings-snapshot.json")
 
@@ -216,7 +230,7 @@ func RunReviewInteractive(sweatshopPath string) error {
 			Title(fmt.Sprintf("New permission: %s", rule)).
 			Options(
 				huh.NewOption("Promote to global (all repos)", ReviewPromoteGlobal),
-				huh.NewOption(fmt.Sprintf("Promote to %s (this repo)", comp.Repo), ReviewPromoteRepo),
+				huh.NewOption(fmt.Sprintf("Promote to %s (this repo)", repoName), ReviewPromoteRepo),
 				huh.NewOption("Keep for this worktree only", ReviewKeep),
 				huh.NewOption("Discard", ReviewDiscard),
 			).
@@ -232,5 +246,5 @@ func RunReviewInteractive(sweatshopPath string) error {
 		})
 	}
 
-	return RouteDecisions(tiersDir, comp.Repo, settingsPath, decisions)
+	return RouteDecisions(tiersDir, repoName, settingsPath, decisions)
 }
